@@ -1,0 +1,114 @@
+% Chapter 6 -- Rubric: PO11, PO9 (9.1--9.4), PO6 (6.1), PO7 (7.1), PO8 (8.1--8.4)
+\chapter{Project Management, Teamwork, and Impact}
+\label{ch:management}
+
+\section{Project Management and Finance}
+
+\subsection{Planning and Risk Management}
+\label{sec:plan}
+\guidance{Present the plan: phases, milestones, task distribution, and schedule,
+noting where actual progress differed. List the major risks and how they
+were mitigated.}
+\begin{figure}[htbp]
+  \centering
+  \begin{ganttchart}[
+      hgrid, vgrid, x unit=0.9cm,
+      time slot format=isodate-yearmonth, time slot unit=month,
+      title label font=\small, bar label font=\small,
+      bar/.style={fill=gray!40}
+    ]{2026-01}{2026-12}
+    \gantttitlecalendar{year, month=shortname} \\
+    \ganttbar{Requirements}{2026-01}{2026-02} \\
+    \ganttbar{Design}{2026-02}{2026-04} \\
+    \ganttbar{Implementation}{2026-04}{2026-09} \\
+    \ganttbar{Testing}{2026-08}{2026-10} \\
+    \ganttbar{Report}{2026-10}{2026-12}
+  \end{ganttchart}
+  \caption{Project schedule}
+  \label{fig:gantt}
+\end{figure}
+
+\subsection{Budgeting and Resource Identification}
+\label{sec:budget}
+\guidance{Identify the resources required (people, hardware, software, cloud
+and API services, data) with an itemised budget.}
+
+\subsection{Economic Analysis and Financial Prospecting}
+\label{sec:economics}
+\guidance{Evaluate the financial prospect of the project with clear
+interpretation: development and operating cost, the potential users or
+market established in \Cref{sec:market}, and how the solution could
+generate value or revenue.}
+
+\subsection{Sustainability in Business and Commercialisation}
+\label{sec:commercialisation}
+\guidance{Explain how the solution could remain viable after the course:
+the commercialisation or deployment path (e.g. with the industry partner)
+and who would maintain and operate it.}
+
+\section{Individual and Teamwork}
+\label{sec:team}
+
+\subsection{Participation and Contribution}
+\label{sec:participation}
+\guidance{For each member, give the role, specific contributions, participation
+in discussions and decision-making, and whether responsibilities were
+completed on time.}
+
+\subsection{Collaboration and Conflict Resolution}
+\label{sec:collaboration}
+\guidance{Describe how the team collaborated and kept a constructive atmosphere,
+and how any conflicts were identified and resolved.}
+
+\subsection{Leadership and Direction}
+\label{sec:leadership}
+\guidance{Explain how direction toward the goals was provided, how members' views
+were listened to, how the team planned for improvement after setbacks, and
+how members were motivated.}
+
+\subsection{Multidisciplinary Engagement}
+\label{sec:multidisciplinary}
+\guidance{Explain the multidisciplinary nature of the project and the team's
+participation in activities outside its own discipline: work with the
+industry partner, domain experts, end users, or other departments.}
+
+\section{Impact on Society}
+\label{sec:society}
+\guidance{Consider all impacts of the solution on society, positive and negative,
+covering health, safety, cultural, and legal issues explicitly. For each,
+state who is affected and how the design responds. Be specific to this
+project.}
+
+\section{Environmental Impact and Life Cycle Sustainability}
+\label{sec:sustainability}
+\guidance{Consider the environmental and sustainability impacts over the entire
+life cycle: development, deployment and operation, and retirement of the system and its data. Identify
+the negative impacts and propose mitigation for each.}
+
+\section{Ethics}
+\label{sec:ethics}
+
+\subsection{Equity and Inclusivity}
+\label{sec:equity}
+\guidance{Show how equity and inclusivity were considered: accessibility,
+fairness across user groups, and who might be excluded and how that was
+addressed.}
+
+\subsection{Accountability and Personal Responsibility}
+\label{sec:accountability}
+\guidance{Show accountability and personal responsibility: who is responsible
+for the system's behaviour and failures, and how members took responsibility
+for their own work.}
+
+\subsection{Proper Use of Intellectual Property}
+\label{sec:ip}
+\guidance{Show due acknowledgement of others' work, prior art, intellectual
+property, and copyrighted material: cite sources, list third-party code,
+models, and datasets with their licences, and disclose any generative AI
+use.}
+
+\subsection{Professionalism and Ethical Codes}
+\label{sec:codes}
+\guidance{Show understanding of the engineer's role in protecting the public
+interest and awareness of the relevant codes of ethics (e.g. ACM, IEEE,
+IEB). Explain how they guided specific project decisions.}

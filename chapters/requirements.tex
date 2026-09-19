@@ -614,10 +614,341 @@ C-09 & Confidentiality & Work is conducted under a non-disclosure agreement with
 
 \section{Regulatory Requirements and Standards}
 \label{sec:standards}
-\guidance{Identify all relevant regulatory requirements, engineering standards, and
-codes of practice (e.g. data-protection law, WCAG, OWASP, ISO/IEC/IEEE
-standards, industry rules, partner policies). For each, state why it applies
-and how the design complies.}
+% \guidance{Identify all relevant regulatory requirements, engineering standards, and
+% codes of practice (e.g. data-protection law, WCAG, OWASP, ISO/IEC/IEEE
+% standards, industry rules, partner policies). For each, state why it applies
+% and how the design complies.}
+
+\subsection{Scope and Approach}
+\label{subsec:standards-approach}
+
+This section identifies the legal obligations, engineering standards and codes of
+practice that govern the system, states why each applies, and records how the
+design responds to it. Three categories are distinguished, because they bind the
+project with differing force. Contractual obligations arising from the agreement
+with SSCL are binding without qualification. Statutory data-protection
+obligations are treated as a reference model rather than a directly binding
+regime, for the reasons given in Section~\ref{subsec:data-protection}. Engineering
+standards are adopted voluntarily as recognised good practice, and conformance to
+them is claimed only where it can be evidenced.
+
+Where a standard is only partially satisfied, this is stated explicitly rather
+than omitted. Section~\ref{subsec:compliance-summary} consolidates the identified
+gaps, each of which is either mitigated, accepted with justification, or carried
+forward as work required before the system is handed over for production use.
+
+\subsection{Data Protection and Privacy}
+\label{subsec:data-protection}
+
+\paragraph{Why it applies.}
+The system processes data derived from identifiable individuals. Version-control
+metrics attribute commits, reviews and pull requests to named contributors;
+issue-tracker metrics reference assignees, and the survey subsystem collects
+free-text opinions authored by SSCL's employees. For data protection and privacy, we followed GDPR principles from the start, since building to the stricter rule was safer than redesigning the system later.
+
+\paragraph{How the design complies.}
+Five GDPR principles were treated as design constraints. 
+\begin{itemize}
+  \item \textbf{Data minimisation:} It governs what leaves the system. The prompts submitted to the external language
+model are constructed so as to exclude personal names and work-item identifiers,
+carrying only aggregate scores and depersonalised descriptions of operational
+conditions. 
+  \item \textbf{Purpose limitation:} It is reflected in the metric set, which was
+restricted to indicators of project and process health rather than measures of
+individual productivity. 
+  \item \textbf{Storage limitation and integrity:} These are served by
+encrypting credential material at rest and restricting its retrieval
+(NFR-01, NFR-04). 
+  \item \textbf{Anonymisation:} It is enforced structurally rather than by
+policy. The survey response record carries a randomly generated submission
+identifier and holds no foreign key to any user, so responses cannot be
+re-associated with respondents even by an administrator with full database
+access. 
+  \item \textbf{Lawfulness and transparency:} In respect of automated
+processing, these were addressed by disclosing to SSCL that project health context
+is transmitted to a third-party language-model service operating under free-tier
+terms (Section~\ref{subsec:third-party-terms}).
+\end{itemize}
+
+\paragraph{Identified gaps.}
+The system provides no data-subject access, rectification or erasure mechanism,
+and defines no retention schedule for collected metrics or survey responses. Both
+are recorded as G-01 and G-02 in Section~\ref{subsec:compliance-summary}.
+
+% \begin{verbatim}
+% % VERIFY BEFORE SUBMISSION: confirm with your supervisor the current status of
+% % domestic data-protection legislation and adjust the framing in this subsection
+% % accordingly. The text above is written to remain defensible either way.
+% \end{verbatim}
+
+\subsection{Partner Policy and Contractual Obligations}
+\label{subsec:partner-policy}
+
+\paragraph{Why it applies.}
+Work was conducted under a non-disclosure agreement with SSCL. The agreement
+governs the handling of their source-repository data, issue-tracker contents,
+access credentials and internal process information, and constrains what may be
+disclosed in this report.
+
+\paragraph{How the design complies.}
+Access credentials supplied by SSCL are encrypted at rest, masked in all
+API responses by default, retrievable only through an explicit
+administrator-restricted action, and excluded from application logs
+(NFR-01, NFR-04). Where a credential is used as a grouping key during scheduled
+synchronisation, it is first reduced to a one-way hash so that the operational
+logs never contain the credential itself. The system integrates strictly
+read-only, requesting only the API scopes necessary for metric retrieval, and
+holds no capability to modify the partner's repositories, pipelines or issue
+tracker (C-07). In this report, identifying details of SSCL are handled
+according to the disclosure terms of the agreement.
+
+\subsection{Third-Party Terms of Service as Codes of Practice}
+\label{subsec:third-party-terms}
+
+\paragraph{Why it applies.}
+The system's core function depends on six external services, each imposing
+contractual usage terms, authentication requirements and quota limits. Because
+all are consumed under free service tiers (C-03), their terms constrain the
+design directly rather than being a matter of billing.
+
+\paragraph{How the design complies.}
+Rate limits published by the version-control provider are respected through a
+shared throttled API client that observes the provider's own rate-limit response
+headers, applies bounded concurrency, and abandons a request rather than blocking
+a worker indefinitely when a limit reset would require an extended wait
+(NFR-15, NFR-16). Scheduled synchronisation groups projects that share an access
+credential and staggers them in time, so that a single credential's quota is not
+exhausted by a burst of concurrent runs.
+
+The terms governing the language-model service warrant specific note. The service
+is consumed under its free tier, whose terms permit submitted inputs to be used
+by the provider for product improvement. The project responded in three ways:
+the content transmitted is constrained by the data-minimisation measures of
+Section~\ref{subsec:data-protection}; the limitation was documented in the
+project's own technical reference as an explicit operating caution; and
+SSCL was informed that the free tier is used for question generation and
+response analysis, so that the decision to proceed was made by the data
+controller rather than assumed by the development team.
+
+\paragraph{Identified gap.}
+Free-text survey responses are authored by developers and cannot be validated
+against the data-minimisation rules before transmission; a respondent may
+volunteer identifying information within their own answer. This residual risk is
+recorded as G-03.
+
+\subsection{Application Security: OWASP}
+\label{subsec:owasp}
+
+\paragraph{Why it applies.}
+The system is an internet-facing web application that custodies third-party
+access credentials and exposes one endpoint family to unauthenticated users. The
+OWASP Top~10 (2021) was adopted as the reference catalogue of application
+security risks, and the OWASP Application Security Verification Standard (ASVS)
+Level~1 as the corresponding verification framework.
+
+\begin{longtable}{
+  >{\raggedright\arraybackslash}p{0.20\textwidth}
+  >{\raggedright\arraybackslash}p{0.66\textwidth}
+}
+\caption{Design response to the OWASP Top 10 (2021)}
+\label{tab:owasp}\\
+\toprule
+\textbf{Risk} & \textbf{How the design responds} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Risk} & \textbf{How the design responds} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+A01 Broken Access Control & Every data access is scoped to the requesting user's
+company; administrative operations verify the administrator role; members are
+additionally verified as assigned to the project requested. Where a resource is
+addressed by a surrogate identifier, its ownership by the named project is confirmed
+before it is served, so that identifiers cannot be enumerated across tenants. \\
+\addlinespace
+A02 Cryptographic Failures & Credential material is encrypted at rest using
+AES-256-GCM with a per-record initialisation vector. Passwords are stored only as
+bcrypt hashes. Session cookies are set \texttt{httpOnly}, \texttt{secure} in
+production deployments, and \texttt{sameSite}-constrained. Transport encryption is
+terminated by the hosting platforms \\
+\addlinespace
+A03 Injection & Database access is performed exclusively through a parameterised
+query builder; no SQL is assembled by string concatenation. User-supplied search
+terms are sanitised of pattern metacharacters before use in pattern matching. Any user-supplied text placed into an outgoing HTML email such as a person's
+name is escaped first, so that characters with special meaning in HTML are
+rendered as plain text rather than interpreted as markup. \\
+\addlinespace
+A04 Insecure Design & Protection against misuse is built into the design rather than added later. Survey
+dispatch is bounded by per-project quotas and per-recipient cooldowns,
+unauthenticated endpoints are rate-limited, survey links carry an expiry that is
+verified on every use, and respondent anonymity is enforced by the absence of a
+linking column rather than by access rules \\
+\addlinespace
+A05 Security Misconfiguration & Standard security response headers are applied by
+middleware. Cross-origin access is restricted to a single configured origin with
+credentials enabled; no wildcard origin is used. All secrets and endpoints are
+supplied by environment configuration, with none committed to source (NFR-24) \\
+\addlinespace
+A06 Vulnerable and Outdated Components & Dependency versions are pinned by lockfile
+and installed reproducibly in continuous integration. \\
+\addlinespace
+A07 Identification and Authentication Failures & Authentication failures return an
+identical message whether the address is unknown or the password is wrong, preventing
+account enumeration. Self-registration requires a one-time emailed verification
+code. Password-reset and invitation tokens are single-use. A password reset revokes
+every existing session for that user. Sessions expire on a rolling inactivity window
+\\
+\addlinespace
+A08 Software and Data Integrity Failures & Survey access tokens are sealed with an
+AES-GCM authentication tag, so that modification of the embedded survey identifier or
+deadline causes decoding to fail rather than to succeed with altered values. Every
+change is validated by an automated pipeline before merge (NFR-23) \\
+\addlinespace
+A09 Security Logging and Monitoring Failures & The application emits structured logs
+throughout the request and job lifecycle. Credential values are never logged; where a
+credential must serve as a grouping key it is reduced to a truncated one-way hash
+first. (See gap G-04) \\
+\addlinespace
+A10 Server-Side Request Forgery & Outbound requests target provider API endpoints.
+The issue-tracker base URL is derived from a pasted board URL validated against a
+pattern that constrains it to an HTTPS host, and its use is confined to authenticated
+API calls whose responses are parsed as structured data and never returned verbatim
+to the client. (See gap G-05) \\
+\end{longtable}
+
+\subsection{Accessibility: WCAG 2.1 Level AA}
+\label{subsec:wcag}
+
+\paragraph{Why it applies.}
+The client application is the sole interface through which managers perform
+routine assessment (NFR-18). As a web interface intended for daily professional
+use, it falls within the scope of the Web Content Accessibility Guidelines,
+against which Level~AA is the conventional target for non-public professional
+software.
+
+\paragraph{How the design complies.}
+Interactive elements that are not natively focusable carry explicit roles, are
+included in the tab order, and respond to keyboard activation as well as pointer
+input, satisfying the keyboard-operability criteria. State-bearing controls expose
+their state programmatically through the corresponding ARIA attributes.
+Non-text status is never conveyed by colour alone, every health score is rendered
+as a numeric value alongside its colour coding, so that the information survives
+both monochrome rendering and colour-vision deficiency. Page structure uses
+semantic headings, with a visually hidden heading provided where the visual design
+does not call for one.
+
+\paragraph{Identified gap.}
+Conformance has not been formally audited, whether by automated tooling or by
+assistive-technology testing; contrast ratios have not been measured against the
+Level~AA threshold; and the charting library used for trend visualisation offers
+limited screen-reader semantics. Conformance is therefore claimed as partial and
+unverified, and is recorded as G-06.
+
+\subsection{Software Engineering Standards}
+\label{subsec:engineering-standards}
+
+\begin{longtable}{
+  >{\raggedright\arraybackslash}p{0.20\textwidth}
+  >{\raggedright\arraybackslash}p{0.30\textwidth}
+  >{\raggedright\arraybackslash}p{0.36\textwidth}
+}
+\caption{Engineering standards adopted and their application}
+\label{tab:engineering-standards}\\
+\toprule
+\textbf{Standard} & \textbf{Why it applies} & \textbf{How it is applied} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Standard} & \textbf{Why it applies} & \textbf{How it is applied} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+ISO/IEC 25010 (SQuaRE product quality model) & Provides an accepted vocabulary for
+expressing quality requirements, avoiding an ad hoc classification of non-functional
+needs & The non-functional requirements of
+Section~\ref{subsec:non-functional-requirements} are organised by its quality
+characteristics which are security, reliability, performance efficiency, usability,
+maintainability and portability \\
+\addlinespace
+ISO/IEC/IEEE 29148:2018 (Requirements engineering) & Governs how requirements are
+expressed, independently of what they require & Requirements are stated individually,
+in the imperative, so as to be singular and verifiable, and are uniquely identified
+to permit traceability into the design, implementation and testing chapters. This
+standard supersedes IEEE~830, which is therefore not cited \\
+\addlinespace
+ISO 8601 and RFC 3339 (Date and time representation) & The system reasons about time
+across zones: it schedules work in a named zone, stores instants from distributed
+processes, and renders temporal axes & All instants are stored and exchanged in UTC
+using the ISO~8601 profile defined by RFC~3339. A defect arising from zone-naive
+storage was identified and corrected by a schema migration converting affected
+columns to zone-aware types, after which chart labelling and elapsed-time reporting
+became correct irrespective of the reader's locale \\
+\addlinespace
+OWASP ASVS Level 1 & Supplies verification criteria corresponding to the risk
+catalogue of Section~\ref{subsec:owasp} & Adopted as the yardstick against which the
+security posture was self-assessed. A formal ASVS assessment was not performed
+(see gap G-07) \\
+\end{longtable}
+
+\subsection{Compliance Summary and Identified Gaps}
+\label{subsec:compliance-summary}
+
+Table~\ref{tab:compliance-gaps} consolidates the shortfalls identified above.
+Each is classified as \emph{accepted}, where the gap is justified by a project
+constraint and carries tolerable residual risk; or \emph{outstanding}, where
+remediation is required before the system is handed over to [PARTNER] for
+production use.
+
+\begin{longtable}{
+  >{\raggedright\arraybackslash}p{0.06\textwidth}
+  >{\raggedright\arraybackslash}p{0.32\textwidth}
+  >{\raggedright\arraybackslash}p{0.16\textwidth}
+  >{\raggedright\arraybackslash}p{0.32\textwidth}
+}
+\caption{Identified compliance gaps and their disposition}
+\label{tab:compliance-gaps}\\
+\toprule
+\textbf{ID} & \textbf{Gap} & \textbf{Obligation affected} & \textbf{Disposition} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{ID} & \textbf{Gap} & \textbf{Obligation affected} & \textbf{Disposition} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+G-01 & No data-subject access, rectification or erasure mechanism is exposed & Data
+protection & Outstanding. Accepted within the project scope for now, but should be  implemented in future.\\
+\addlinespace
+G-02 & No retention schedule is defined for metrics, snapshots or survey responses &
+Data protection & Outstanding. To be agreed with SSCL as the data controller \\
+\addlinespace
+G-03 & Free-text survey answers may contain identifying information volunteered by
+the respondent and cannot be filtered before transmission to the external
+language-model service & Data protection; third-party terms & Accepted. Mitigated by
+instructing respondents that responses are anonymous and by prompt-level instructions
+excluding identifying content from generated output \\
+\addlinespace
+G-04 & Logs are emitted in structured form but are not aggregated centrally, and no
+alerting is configured on security-relevant events & OWASP A09 & Accepted.
+Attributable to the absence of budget for log-management infrastructure (C-03) \\
+\addlinespace
+G-05 & The issue-tracker base URL is user-supplied and constitutes a residual
+server-side request forgery surface, constrained but not eliminated by pattern
+validation & OWASP A10 & Accepted. Residual risk is limited. The endpoint requires
+administrator privileges, responses are parsed rather than relayed, and no response
+body is returned to the caller \\
+\addlinespace
+G-06 & WCAG 2.1 Level AA conformance is partial and has not been audited; contrast
+ratios are unmeasured and chart components offer limited assistive-technology
+semantics & WCAG 2.1 AA & Accepted. Attributable to the absence of a dedicated design
+or accessibility specialist within the team (C-02) \\
+\addlinespace
+G-07 & No formal OWASP ASVS assessment was conducted; the standard was applied as a self-assessment reference only & OWASP ASVS L1 & Accepted. Proportionate to project scale \\
+\end{longtable}
 
 \section{Formulation of Solutions}
 \label{sec:alternatives}

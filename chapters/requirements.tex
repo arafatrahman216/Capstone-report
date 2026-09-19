@@ -185,15 +185,14 @@ without compromising the anonymity of individual respondents \\
 O-05 & Close the management loop by recording the actions taken in response to
 identified problems and reviewing their effectiveness after a defined interval \\
 \addlinespace
-O-06 & Operate unattended, accumulating trend data on a fixed cadence without
-requiring manual triggering \\
+O-06 & Accumulate project health history automatically on a fixed schedule, so that trend data is evenly spaced and does not depend on users manually triggering synchronisation. \\
 \addlinespace
 O-07 & Remain extensible to additional tools and providers without modification of
 the core scoring logic \\
 \end{longtable}
 
 Objectives O-03 and O-05 distinguish the system from a conventional metrics
-dashboard: the first makes scores accountable rather than opaque, and the second
+dashboard, the first makes scores accountable rather than opaque, and the second
 records the managerial response alongside the measurement, enabling later
 assessment of whether interventions worked.
 
@@ -271,7 +270,7 @@ FR-10 & The system shall allow further repositories to be imported into an exist
 workspace, excluding those already imported \\
 \addlinespace
 FR-11 & The system shall allow an administrator to configure per-project integrations
-for project management, code quality and continuous integration tools, with the
+for project management, code quality and CI/CD tools, with the
 version-control credential inherited from the workspace \\
 \addlinespace
 FR-12 & The system shall mask credential values in all responses by default, and
@@ -301,7 +300,7 @@ FR-13 & The system shall allow a user to trigger an immediate synchronisation of
 project across all of its configured tools \\
 \addlinespace
 FR-14 & The system shall retrieve metrics from a version-control platform, an
-issue-tracking platform, a static code-analysis service and a continuous-integration
+issue-tracking platform, a static code-analysis service and a CI/CD
 service \\
 \addlinespace
 FR-15 & The system shall record each synchronisation as an immutable, timestamped
@@ -382,7 +381,7 @@ and their individual contributions \\
 \bottomrule
 \endlastfoot
 FR-27 & The system shall generate survey questions automatically, informed by the
-project's current health scores, their trend since the previous synchronisation, andnotable operational conditions detected in the latest metrics \\
+project's current health scores, their trend since the previous synchronisation, and notable operational conditions detected in the latest metrics \\
 \addlinespace FR-28 & The system shall filter generated questions for duplication and assess their
 quality, discarding those below a configurable quality threshold \\
 \addlinespace
@@ -397,7 +396,7 @@ FR-33 & The system shall not email a developer a survey within a configurable
 cooldown period of their previous survey email, and shall rotate fairly between the  
 projects a developer belongs to \\
 \addlinespace                                                                        
-FR-34 & The system shall accept anonymous responses through a time-limited link that
+FR-34 & The system shall accept anonymous responses through the time-limited link that
 expires at a configurable deadline \\                                                
 \addlinespace
 FR-35 & The system shall close a survey at its deadline or on demand and produce an  
@@ -446,8 +445,8 @@ and an administrator to do so for any action within their company \\
 \label{subsec:non-functional-requirements}
 
 \begin{longtable}{
-  >{\raggedright\arraybackslash}p{0.08\textwidth}
-  >{\raggedright\arraybackslash}p{0.78\textwidth}
+  >{\raggedright\arraybackslash}p{0.10\textwidth}
+  >{\raggedright\arraybackslash}p{0.75\textwidth}
 }
 \caption{Non-functional requirements}
 \label{tab:nfr}\\
@@ -598,19 +597,19 @@ is required for both job queuing and session storage, making it a hard runtime
 dependency \\
 \addlinespace
 C-05 & Data availability & The system can only measure what the external tools
-expose. Several intended metrics are unobtainable in practice: security alert counts
-are unavailable where the repository has not enabled the relevant scanning feature;
+expose. Several intended metrics are unobtainable in practice such as security alert counts
+are unavailable where the repository has not enabled the relevant scanning feature,
 test coverage is reported only where the project's pipeline publishes a coverage
-report; and certain issue-tracker fields are instance-specific custom fields whose
+report, and certain issue-tracker fields are instance-specific custom fields whose
 identifiers vary between organisations \\
 \addlinespace
 C-06 & Data history & No historical backfill is possible from the source tools for most metrics. Trend data therefore accumulates only from the first synchronisation onward, meaning the system's analytical value increases over time and is limited immediately after adoption \\
 \addlinespace
 C-07 & Integration access & The system operates strictly read-only against the partner's tools using access tokens, with no ability to install agents, configure webhooks or otherwise modify the partner's infrastructure \\
 \addlinespace
-C-08 & Deployment & The system is deployed to managed cloud platforms --- a container platform for the server components, a static hosting platform for the client application, and managed cache and database services. At the time of writing it is hosted and operational but has not yet been handed over to [PARTNER] for production use \\
+C-08 & Deployment & The system is deployed to managed cloud platforms which includes a container platform for the server components, a static hosting platform for the client application, and managed cache and database services. At the time of writing it is hosted and operational but has not yet been handed over to SSCL for production use \\
 \addlinespace
-C-09 & Confidentiality & Work is conducted under a non-disclosure agreement with [PARTNER], which governs the handling of their data and the disclosure of information in this report. The obligations arising from it are addressed in Section~\ref{sec:standards} \\
+C-09 & Confidentiality & Work is conducted under a non-disclosure agreement with SSCL, which governs the handling of their data and the disclosure of information in this report. The obligations arising from it are addressed in Section~\ref{sec:standards} \\
 \end{longtable}
 
 \section{Regulatory Requirements and Standards}

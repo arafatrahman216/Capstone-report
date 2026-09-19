@@ -4,66 +4,185 @@
 
 \section{Background and Motivation}
 \label{sec:background}
-\guidance{Introduce the domain and explain why the problem matters: who is
-affected, at what scale, and what the current situation costs them.}
+
+A software organisation runs each of its projects through several specialised
+tools: a version-control platform for source code and code review, an
+issue-tracking platform for planning and sprint management, a static
+code-analysis service for code quality, and a CI/CD service for builds and
+deployments. Each tool exposes its own dashboard, reports its own metrics in its
+own vocabulary, and answers questions only about its own slice of the work.
+None of them answers the question that engineering leadership actually asks:
+\emph{is this project, taken as a whole, healthy, and is it improving or
+deteriorating?}
+
+The consequence, as described by Spectrum Software \& Consulting Pvt.\ Ltd.\
+(SSCL), the industry partner that originated this project, is that assessing the state of a single project means opening
+four to five dashboards in turn and reconciling their readings by judgement.
+Doing this across a whole portfolio is impractical, so it is done
+infrequently. As a result, a project that is gradually deteriorating is often
+noticed only after the damage has become visible as missed deadlines or failing
+builds.
+
+Two further gaps compound this. First, tool metrics describe what the code and
+the pipeline are doing, but not how the team is doing; low morale, persistent
+blockers, and loss of confidence in a plan are often the earliest signals of a
+project in trouble, and they appear in no dashboard. Second, when a manager does
+identify a problem and acts on it, the action is recorded nowhere, so there is
+no later way to tell whether the intervention worked.
+
+Pulse addresses these gaps. It ingests metrics from the separate tools,
+normalises them into comparable health scores on a single scale, keeps every
+score explainable in terms of the metrics that produced it, collects anonymous
+team feedback that metrics cannot capture, and records the management actions
+taken in response so that their effectiveness can be reviewed. It is designed as
+a trend indicator, revealing how projects move over weeks and months, rather
+than as a real-time monitor.
 
 \section{Problem Statement}
 \label{sec:problem-statement}
-\guidance{State precisely the problem the project solves. Formulate it in
-engineering terms: the inputs and outputs, the entities involved, the
-quantities to be optimised or guaranteed, and the assumptions made. Identify
-the engineering knowledge (mathematics, computing fundamentals, specialist
-knowledge) the problem demands.}
+
+Engineering leadership and project managers at software organisations such as
+SSCL oversee many projects at once, and each project produces its data in
+several independent tools: version control, issue tracking, static code
+analysis and CI/CD. Every tool reports its own metrics on its own scale, and
+none of them offers a common notion of whether a project is healthy. To judge a
+project's condition, a manager has to gather readings from each tool separately
+and reconcile them by hand, and the tools capture nothing about how the team
+itself is faring or about what management did when a problem was found.
+
+Because this reconciliation is slow and manual, it is done infrequently and
+inconsistently; projects cannot be compared on a like-for-like basis; and a
+project that is gradually deteriorating is usually recognised only once the
+damage has become visible. The early warning signs that only the team is aware of, such
+as people losing motivation or work that keeps getting stuck, never reach any
+dashboard, and because
+interventions are not recorded, whether they helped is never known. What is
+missing is a single, comparable and explainable view of project health that
+draws on all of these tools, that captures the team's own signal without
+exposing individuals, and that connects management action to measured outcome.
+Closing that gap is the problem this project addresses.
 
 \section{Complexity of the Problem}
 \label{sec:complexity}
-A complex engineering problem must have characteristic P1 and some or all of
-P2--P7 (\Cref{tab:complexity}). P1 requires in-depth knowledge at the level
-of one or more of the knowledge profiles K3--K8 listed in
-\Cref{tab:knowledge-profile}.
 
-\guidance{For P1, name the knowledge profile(s) involved and show where in the
-project that knowledge was applied. For each of P2--P7 that applies, give
-concrete evidence from this project. Drop the rows that do not apply.}
+\begin{longtable}{
+  >{\raggedright\arraybackslash}p{0.05\textwidth}
+  >{\raggedright\arraybackslash}p{0.38\textwidth}
+  >{\raggedright\arraybackslash}p{0.45\textwidth}
+}
+\caption{Complex engineering problem characteristics (P1--P7) and evidence from this project}
+\label{tab:complexity}\\
+\toprule
+\textbf{Code} & \textbf{Definition} & \textbf{Evidence from this project} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Code} & \textbf{Definition} & \textbf{Evidence from this project} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+P1 & \textbf{Depth of knowledge required.} Cannot be resolved without in-depth engineering knowledge at the level of one or more of K3, K4, K5, K6, or K8, which allows a fundamentals-based, first-principles analytical approach. &
+K3: the weighted-normalisation scoring model, its handling of missing inputs, and its exact decomposition into per-metric contributions.
+K4 and K6: asynchronous job processing with retries and idempotent scheduling; rate-limit-aware integration with third-party REST and GraphQL APIs; credential encryption, password hashing and session security.
+K5: the connector abstraction that isolates provider-specific ingestion from scoring, and the snapshot-based data model that makes every score reproducible. \\
+\addlinespace
+P2 & \textbf{Range of conflicting requirements.} Involves wide-ranging or conflicting technical, engineering, and other issues. &
+\guidance{To be completed after discussion with the team} \\
+\addlinespace
+P3 & \textbf{Depth of analysis required.} Has no obvious solution and requires abstract thinking and originality in analysis to formulate suitable models. &
+There is no established mapping from heterogeneous tool metrics to a single comparable scale. The team had to derive, per metric, a normalisation function and weight, define how absent metrics are treated, and design the scores so that they remain exactly explainable; and had to design survey aggregation that yields team-level insight without any per-respondent record. \\
+\addlinespace
+P4 & \textbf{Familiarity of issues.} Involves infrequently encountered issues. &
+\guidance{To be completed after discussion with the team} \\
+\addlinespace
+P6 & \textbf{Extent of stakeholder involvement and conflicting requirements.} Involves diverse groups of stakeholders with widely varying needs. &
+Seven stakeholder groups (\Cref{tab:stakeholders}): the client's leadership, its managers, its developers as data subjects, the tenant administrator, the academic supervisor, external service providers as constraint setters, and the development team, whose needs conflict as set out under P2. \\
+\addlinespace
+P7 & \textbf{Interdependence.} Is a high-level problem including many component parts or sub-problems. &
+Authentication and tenancy; workspace and connector configuration; metric ingestion and scheduling; scoring; survey generation, distribution and analysis; and the action log. These are dependent: scoring requires ingestion, survey generation is driven by scores and their trends, actions are recorded against both, and scheduling must space projects that share a credential to stay within rate limits. \\
+\end{longtable}
 
-\begin{table}[htbp]
-  \centering
-  \caption{Complex engineering problem characteristics (P1--P7) and evidence from this project}
-  \label{tab:complexity}
-  \begin{tabularx}{\textwidth}{l>{\hsize=1.15\hsize}Y>{\hsize=0.85\hsize}Y}
-    \toprule
-    Code & Definition & Evidence from this project \\
-    \midrule
-    P1 & \textbf{Depth of knowledge required.} Cannot be resolved without in-depth engineering knowledge at the level of one or more of K3, K4, K5, K6, or K8, which allows a fundamentals-based, first-principles analytical approach. & \guidance{Which of K3--K8, and where applied (mandatory)} \\
-    P2 & \textbf{Range of conflicting requirements.} Involves wide-ranging or conflicting technical, engineering, and other issues. & \guidance{The conflicting requirements and trade-offs} \\
-    P3 & \textbf{Depth of analysis required.} Has no obvious solution and requires abstract thinking and originality in analysis to formulate suitable models. & \guidance{Why routine methods were insufficient} \\
-    P4 & \textbf{Familiarity of issues.} Involves infrequently encountered issues. & \guidance{The non-routine issues} \\
-    P5 & \textbf{Extent of applicable codes.} Is outside problems encompassed by standards and codes of practice for professional engineering. & \guidance{Where standards did not cover the problem} \\
-    P6 & \textbf{Extent of stakeholder involvement and conflicting requirements.} Involves diverse groups of stakeholders with widely varying needs. & \guidance{The stakeholder groups and their conflicting needs} \\
-    P7 & \textbf{Interdependence.} Is a high-level problem including many component parts or sub-problems. & \guidance{The sub-problems and their dependencies} \\
-    \bottomrule
-  \end{tabularx}
-\end{table}
-
-\begin{table}[htbp]
-  \centering
-  \caption{Knowledge profiles referenced by P1}
-  \label{tab:knowledge-profile}
-  \begin{tabularx}{\textwidth}{lY}
-    \toprule
-    Code & Description \\
-    \midrule
-    K3 & A systematic, theory-based formulation of engineering fundamentals required in the engineering discipline. \\
-    K4 & Engineering specialist knowledge that provides theoretical frameworks and bodies of knowledge for the accepted practice areas in the engineering discipline; much is at the forefront of the discipline. \\
-    K5 & Knowledge that supports engineering design in a practice area. \\
-    K6 & Knowledge of engineering practice (technology) in the practice areas in the engineering discipline. \\
-    K8 & Engagement with selected knowledge in the research literature of the discipline. \\
-    \bottomrule
-  \end{tabularx}
-\end{table}
+\begin{longtable}{
+  >{\raggedright\arraybackslash}p{0.08\textwidth}
+  >{\raggedright\arraybackslash}p{0.80\textwidth}
+}
+\caption{Knowledge profiles referenced by P1}
+\label{tab:knowledge-profile}\\
+\toprule
+\textbf{Code} & \textbf{Description} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Code} & \textbf{Description} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+K3 & A systematic, theory-based formulation of engineering fundamentals required in the engineering discipline. \\
+\addlinespace
+K4 & Engineering specialist knowledge that provides theoretical frameworks and bodies of knowledge for the accepted practice areas in the engineering discipline; much is at the forefront of the discipline. \\
+\addlinespace
+K5 & Knowledge that supports engineering design in a practice area. \\
+\addlinespace
+K6 & Knowledge of engineering practice (technology) in the practice areas in the engineering discipline. \\
+\addlinespace
+K8 & Engagement with selected knowledge in the research literature of the discipline. \\
+\end{longtable}
 
 \section{Project Objectives and Scope}
 \label{sec:objectives}
-\guidance{State the objectives as a numbered list of concrete, verifiable goals
-(\Cref{ch:evaluation} evaluates against them), then the scope: what is
-included and what is explicitly excluded.}
+
+The project set out to achieve the following objectives:
+
+\begin{enumerate}
+  \item \textbf{Consolidate} the metrics of a project's version-control,
+  issue-tracking, code-analysis and CI/CD tools into a single dashboard, so
+  that routine status assessment needs none of the tools' own dashboards.
+  \item \textbf{Normalise} those heterogeneous metrics into seven health scores
+  on a common 0--100 scale, plus an overall score, so that any two projects
+  can be compared directly.
+  \item \textbf{Explain} every score on request: which metrics produced it,
+  their measured values, their weights, and each one's contribution.
+  \item \textbf{Capture} qualitative team feedback through anonymous surveys,
+  with no stored link between a respondent and their answers.
+  \item \textbf{Record} the management actions taken in response to identified
+  problems, and prompt for a review of their effectiveness after a set
+  interval.
+  \item \textbf{Accumulate} health history automatically on a fixed schedule,
+  so that trends build up without anyone triggering a synchronisation.
+  \item \textbf{Remain extensible}, so that a further tool provider can be
+  added without changing the scoring logic.
+\end{enumerate}
+
+\textbf{Scope.} The following is within the scope of the project:
+
+\begin{itemize}
+  \item One connector for each tool category: GitHub (version control), Jira
+  (issue tracking), SonarCloud (code quality) and GitHub Actions (CI/CD).
+  \item Multi-tenant organisations with administrator and member roles;
+  workspaces bound to a version-control organisation and access token; import
+  of repositories as projects.
+  \item On-demand and scheduled synchronisation, an immutable snapshot
+  history, and portfolio and per-project dashboards with trends and score
+  breakdowns.
+  \item Automatically generated, editable survey questions; one scheduled
+  survey per project per month plus on-demand surveys; anonymous responses;
+  and survey analysis.
+  \item A management action log with keyword and semantic search and
+  effectiveness review.
+  \item Email delivery of verification codes, password resets, invitations and
+  surveys, and broadcast of survey links to Slack and Discord.
+\end{itemize}
+
+The following is explicitly outside the scope:
+
+\begin{itemize}
+  \item Real-time monitoring; the system is a trend indicator operating on a
+  scheduled cadence.
+  \item Version-control providers other than GitHub and CI/CD systems other
+  than GitHub Actions; the connector abstraction allows them, but they were
+  not implemented.
+  \item Any per-individual performance measurement, ranking or surveillance of
+  developers.
+\end{itemize}

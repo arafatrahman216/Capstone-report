@@ -4,31 +4,86 @@
 
 \section{Literature Review}
 \label{sec:literature}
-\guidance{Review the research literature relevant to the problem: the
-established methods, their results, and their limitations. Synthesise the
-findings rather than listing papers one by one, and state what the
-literature establishes and what it leaves open.}
+A formal literature review is not applicable to this project, which is an
+applied engineering effort rather than a research contribution.
 
 \section{Existing Solutions and Technologies}
 \label{sec:related}
-\guidance{Survey the products, systems, and technologies already available in
-this space, including anything the industry partner already uses: what they
-do, their strengths, and their limitations. Conclude with the gap this
-project addresses. Candidate solutions for this specific problem are
-formulated later, in \Cref{sec:alternatives}.}
+SSCL, like most software organisations, already relies on a set of
+specialised tools that each cover one part of this problem: GitHub for
+version control, Jira for issue tracking, SonarQube for static code
+analysis, and GitHub Actions for CI/CD. Each is capable and widely adopted,
+but each is scoped to its own concern and reports through its own dashboard;
+none aggregates across the others, which is exactly the gap described in
+Chapter 1.
+
+A category of commercial ``engineering intelligence'' platforms --
+LinearB, Swarmia, Faros AI, and Jellyfish among them -- does aggregate
+metrics across the delivery pipeline, mostly throughput and cycle-time
+figures pulled from version control and issue tracking. They integrate with
+the same tools SSCL already uses and produce cross-tool dashboards. However,
+they focus almost entirely on delivery velocity and code metrics: none
+incorporates the team's own qualitative signal through anonymous surveys,
+none records management actions taken in response to a decline or tracks
+whether they worked, and all are priced per seat. Static-analysis and CI
+dashboards (SonarCloud, GitHub Actions) remain confined to their own tool
+with no cross-tool scoring at all.
+
+The gap is a single, explainable health score spanning all four tool
+categories, combined with anonymous team feedback and a record of
+management action and its effectiveness.
 
 \section{Market and User Research}
 \label{sec:market}
-\guidance{Identify who would use the solution and establish the demand for
-it: the size and characteristics of the user base or market, what users
-currently do instead, and what they need. Report the evidence gathered
-(surveys, interviews, discussions with the industry partner, published
-data). The financial implications are analysed in \Cref{sec:economics}.}
+The primary users are engineering leaders and project managers at software
+organisations that run multiple concurrent projects across a mix of
+specialised tools -- version control, issue tracking, static analysis, and
+CI/CD -- for each one. SSCL, the project's industry partner, is
+representative of this user base and was the direct source of evidence for
+the need: its engineering leadership described project-health assessment as
+a routine but repetitive task of opening several dashboards on a fixed
+cadence and reconciling them by judgement, with no tool available to
+aggregate them and no channel through which a team's own sense of how a
+project was going ever reached management.
+
+Because SSCL was the only source of user evidence available to the team, no
+formal market sizing was attempted. The underlying situation, however, is not
+specific to SSCL: any organisation running comparable multi-tool,
+multi-project engineering operations faces the same fragmentation, which
+suggests demand extends beyond the immediate industry partner.
 
 \section{Feasibility Study}
 \label{sec:feasibility}
-\guidance{Assess whether the project is feasible along the dimensions that
-matter to it: technical (available methods, data, and computing resources),
-economic (cost against expected benefit), operational (whether the intended
-users and organisation can adopt it), and legal or regulatory. State the
-conclusion and any assumption the project depends on.}
+\textbf{Technical.} GitHub, Jira, SonarCloud and GitHub Actions each expose
+documented REST or GraphQL APIs with free-tier rate limits sufficient for a
+handful of pilot projects, so all the data the scoring model needs was
+obtainable without purchasing access. The team's existing experience with
+Node.js, TypeScript, Supabase Postgres and Redis/BullMQ meant the pipeline
+could be built on a stack already familiar to it. The main technical risk,
+rate limits shared across projects on the same credential, was manageable by
+spacing scheduled syncs. Free hosting tiers covered the API and frontend; the
+one exception is the background worker, which must run continuously rather
+than on demand and currently has no equivalent free serverless option, so it
+remains unhosted.
+
+\textbf{Economic.} The system was built entirely on free tiers -- Supabase,
+Vercel, Upstash Redis, and the free quotas of the integrated tools -- so
+development introduced no cost beyond the team's time. For SSCL, the
+expected benefit is reducing the recurring manual effort of dashboard
+reconciliation across its portfolio, which comes at no licensing cost to
+adopt.
+
+\textbf{Operational.} Adoption only requires the access tokens SSCL already
+holds for GitHub, Jira and SonarCloud and a short one-time setup per
+project; the underlying tools continue to be used exactly as before, so
+operational disruption is minimal.
+
+\textbf{Legal and regulatory.} Access tokens are stored encrypted, and
+survey responses are collected with no stored link to a respondent, so no
+personally identifiable data is introduced beyond ordinary account
+information.
+
+The project was judged feasible on the assumption that SSCL continues to
+provide the access tokens and project structure it already uses; the
+completed build, delivered within the team's two-semester timeline, confirms
+that assessment.

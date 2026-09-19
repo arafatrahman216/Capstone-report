@@ -4,11 +4,614 @@
 
 \section{Project Objectives and Constraints}
 \label{sec:requirements}
-\guidance{Identify all stakeholders (users, client or industry partner,
-administrators, regulators) and their expectations, including conflicting
-ones. Then clearly state the objectives, the functional and non-functional
-requirements, and the constraints (time, budget, platform, data,
-deployment), taking those expectations into account.}
+% \guidance{Identify all stakeholders (users, client or industry partner,
+% administrators, regulators) and their expectations, including conflicting
+% ones. Then clearly state the objectives, the functional and non-functional
+% requirements, and the constraints (time, budget, platform, data,
+% deployment), taking those expectations into account.}
+
+\subsection{Problem Context and Origin}
+\label{subsec:problem-context}
+
+The project originated with Spectrum Software \& Consulting Pvt. Ltd. (SSCL), a software development organisation. Engineering leadership at
+SSCL monitored the health of their software projects through four to five
+separate tool dashboards such as a version control platform (e.g., Github), an issue-tracking and sprint-planning platform (e.g., Jira), a static code-analysis service (e.g., SonarQube), and a CI/CD service (e.g., Jenkins). Each dashboard presented its own metrics in its
+own vocabulary, with no shared notion of whether a project was, overall, in good
+or poor health. Assessing the state of a single project required visiting every
+dashboard in turn and mentally reconciling the results; assessing a portfolio of
+projects this way was impractical.
+
+SSCL proposed a platform that would ingest data from these separate tools,
+translate heterogeneous raw metrics into a common, comparable scale, and present
+the result in a single view. The system described in this report addresses that
+problem. It is explicitly positioned as a trend indicator system rather
+than a real-time monitoring tool. Its purpose is to reveal how projects and teams
+are trending over weeks and months, not to report the state of a build in the
+last five minutes.
+
+\subsection{Requirements Elicitation}
+\label{subsec:elicitation}
+
+Requirements were gathered through three complementary channels. The primary
+channel was a series of meetings with the Chief Technical Officer of
+SSCL, who originated the concept and articulated the operational pain point,
+the tools in use, and the decisions the system was intended to support. A
+secondary channel was an intern at SSCL with prior exposure to the concept,
+who provided practical grounding on how the organisation's teams actually work
+day to day. The third channel was the team's own analysis such as study of the public
+APIs exposed by the candidate tools to establish which metrics were obtainable in
+practice, and derivation of a scoring model from that feasible metric set.
+Throughout, the university supervisor provided guidance on scope, methodology and
+academic rigour.
+
+\subsection{Stakeholders and Their Expectations}
+\label{subsec:stakeholders}
+
+\begin{longtable}{
+  >{\raggedright\arraybackslash}p{0.08\textwidth}
+  >{\raggedright\arraybackslash}p{0.19\textwidth}
+  >{\raggedright\arraybackslash}p{0.17\textwidth}
+  >{\raggedright\arraybackslash}p{0.40\textwidth}
+}
+\caption{Stakeholders and their principal expectations}
+\label{tab:stakeholders}\\
+\toprule
+\textbf{ID} & \textbf{Stakeholder} & \textbf{Role} & \textbf{Principal expectations} 
+\\
+\midrule                                                                             
+\endfirsthead
+\toprule                                                                             
+\textbf{ID} & \textbf{Stakeholder} & \textbf{Role} & \textbf{Principal expectations} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+SH-01 & SSCL leadership & Client; originator; primary requirement source
+& A single consolidated view replacing four to five dashboards; comparable scores
+across projects; early visibility of declining projects \\
+\addlinespace
+SH-02 & Engineering managers and project managers & Primary end users & Status at a glance; the ability to drill into a score that looks wrong; low operational overhead \\
+\addlinespace
+SH-03 & Developers employed by SSCL & Data subjects and survey respondents & Assurance that the system is not an instrument of individual surveillance or ranking; minimal interruption; the ability to answer candidly without attribution \\
+\addlinespace
+SH-04 & Company administrator & Tenant and credential owner & Control over access tokens, workspace membership and tool configuration; assurance that credentials are not exposed \\
+\addlinespace
+SH-05 & University supervisor & Academic oversight & Methodological rigour, documented decision-making, demonstrable evaluation \\
+\addlinespace
+SH-06 & External tool and service providers & Constraint setters & Adherence to their authentication models, rate limits, free-tier quotas and terms of service \\
+\addlinespace
+SH-07 & Development team & Implementers & A scope deliverable by five students within two semesters\\
+\end{longtable}
+
+\subsection{Conflicting Expectations and Their Resolution}
+\label{subsec:conflicts}
+
+Several stakeholder expectations are in genuine tension. Each conflict was
+resolved by an explicit requirement rather than left to implementation judgement.
+
+\begin{longtable}{
+  >{\raggedright\arraybackslash}p{0.04\textwidth}
+  >{\raggedright\arraybackslash}p{0.34\textwidth}
+  >{\raggedright\arraybackslash}p{0.34\textwidth}
+  >{\raggedright\arraybackslash}p{0.13\textwidth}
+}
+\caption{Conflicting stakeholder expectations and their resolution}
+\label{tab:conflicts}\\
+\toprule
+\textbf{\#} & \textbf{Conflict} & \textbf{Resolution} & \textbf{Encoded by} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{\#} & \textbf{Conflict} & \textbf{Resolution} & \textbf{Encoded by} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+1 & SH-01 seeks insight into how teams are performing; SH-03, the same
+organisation's employees, require that the system not attribute opinions to
+individuals & Qualitative feedback is collected anonymously, with no stored link
+between a respondent and their answers, and aggregate insight is withheld below a
+minimum response count & NFR-07, NFR-08 \\
+\addlinespace
+2 & SH-01 and SH-02 would benefit from frequent team feedback; SH-03 experience
+repeated surveys as interruption and survey fatigue & Survey frequency is capped per
+project per month, and a cooldown is enforced per developer across all projects, with
+fair rotation for developers on several projects & FR-33, FR-31 \\
+\addlinespace
+3 & SH-01 expects current data; SH-06 impose rate limits that make continuous polling
+infeasible under free-tier quotas & The product is positioned as a trend indicator
+on a scheduled cadence rather than a real-time monitor, with on-demand sync available
+when a current reading is needed & FR-13, FR-18, NFR-16 \\
+\addlinespace
+4 & SH-01 expects every project to carry a comparable score; in practice most
+projects have only a subset of the four tool categories configured & Scores are
+computed from whichever inputs are available, with the weight of absent inputs
+redistributed proportionally rather than treated as zero & FR-22 \\
+\addlinespace
+5 & SH-04 must be able to verify and rotate access tokens; the same tokens must never
+be casually exposed & Credentials are masked by default in all responses and
+revealed only through an explicit, administrator-restricted action, and are encrypted
+at rest & FR-12, NFR-01, NFR-04 \\
+\addlinespace
+6 & SH-01 expects the analytical capability that AI features provide; C-03 (in Section~\ref{subsec:constraints}) permits no
+expenditure, and external AI services may be unavailable & AI-dependent features are
+optional, the system degrades to non-AI behaviour when such services are
+unconfigured or unavailable, rather than failing & NFR-13 \\
+\addlinespace
+7 & SH-01 requested coverage of their full toolchain; SH-07 capacity permits only a
+subset within the available time & A representative connector from each of the four
+tool categories was implemented, behind an abstraction that permits further providers
+to be added without altering scoring logic & NFR-21 \\
+\addlinespace
+8 & SH-05 values methodological rigour and documentation; SH-01 values a working,
+maintainable product & Both were treated as delivery criteria: design decisions are
+documented and the scoring rules are specified and unit-tested, which serves the
+academic requirement while improving maintainability for the client & NFR-22, NFR-23
+\\
+\end{longtable}
+
+\subsection{Project Objectives}
+\label{subsec:objectives}
+
+\begin{longtable}{
+  >{\raggedright\arraybackslash}p{0.08\textwidth}
+  >{\raggedright\arraybackslash}p{0.78\textwidth}
+}
+\caption{Project objectives}
+\label{tab:objectives}\\
+\toprule
+\textbf{ID} & \textbf{Objective} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{ID} & \textbf{Objective} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+O-01 & Consolidate engineering metrics from independent tools into a single
+dashboard, removing the need to consult each tool's own dashboard for routine status
+assessment \\
+\addlinespace
+O-02 & Normalise heterogeneous raw metrics into comparable, interpretable health
+scores on a uniform 0--100 scale across seven quality dimensions \\
+\addlinespace
+O-03 & Keep every score explainable and auditable, so that a manager can determine
+which underlying metrics produced a score and how much each contributed \\
+\addlinespace
+O-04 & Capture qualitative team signal via survey that quantitative metrics cannot express,
+without compromising the anonymity of individual respondents \\
+\addlinespace
+O-05 & Close the management loop by recording the actions taken in response to
+identified problems and reviewing their effectiveness after a defined interval \\
+\addlinespace
+O-06 & Operate unattended, accumulating trend data on a fixed cadence without
+requiring manual triggering \\
+\addlinespace
+O-07 & Remain extensible to additional tools and providers without modification of
+the core scoring logic \\
+\end{longtable}
+
+Objectives O-03 and O-05 distinguish the system from a conventional metrics
+dashboard: the first makes scores accountable rather than opaque, and the second
+records the managerial response alongside the measurement, enabling later
+assessment of whether interventions worked.
+
+\subsection{Functional Requirements}
+\label{subsec:functional-requirements}
+
+\subsubsection{Authentication, Tenancy and Access Control}
+
+\begin{longtable}{
+  >{\raggedright\arraybackslash}p{0.08\textwidth}
+  >{\raggedright\arraybackslash}p{0.78\textwidth}
+}
+\caption{Functional requirements: authentication, tenancy and access control}
+\label{tab:fr-auth}\\
+\toprule
+\textbf{ID} & \textbf{Requirement} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{ID} & \textbf{Requirement} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+FR-01 & The system shall allow a new organisation to register, creating a company and
+an initial administrator account, with the administrator's email address verified by
+a one-time code before the account is created \\
+\addlinespace
+FR-02 & The system shall authenticate users by email address and password and
+maintain an authenticated session \\
+\addlinespace
+FR-03 & The system shall allow a user to reset a forgotten password through a
+single-use emailed link, and shall invalidate all of that user's existing sessions
+upon reset \\
+\addlinespace
+FR-04 & The system shall allow an administrator to invite a person to a project by
+email address, using a single-use invitation that the recipient accepts either by
+registering or by accepting while already authenticated \\
+\addlinespace
+FR-05 & The system shall support two roles, administrator and member, where a member
+may access only the projects to which they are assigned and an administrator may
+access all projects within their company \\
+\addlinespace
+FR-06 & The system shall allow an administrator to remove a member from a project \\
+\end{longtable}
+
+\subsubsection{Workspace and Project Configuration}
+
+\begin{longtable}{
+  >{\raggedright\arraybackslash}p{0.08\textwidth}
+  >{\raggedright\arraybackslash}p{0.78\textwidth}
+}
+\caption{Functional requirements: workspace and project configuration}
+\label{tab:fr-workspace}\\
+\toprule
+\textbf{ID} & \textbf{Requirement} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{ID} & \textbf{Requirement} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+FR-07 & The system shall allow an administrator to create a workspace defined by a
+version-control provider, an organisation identifier and an access token \\
+\addlinespace
+FR-08 & The system shall list the repositories reachable with a supplied access token
+before any data is stored, so the administrator can confirm the token's scope \\
+\addlinespace
+FR-09 & The system shall import selected repositories as projects belonging to the
+workspace \\
+\addlinespace
+FR-10 & The system shall allow further repositories to be imported into an existing
+workspace, excluding those already imported \\
+\addlinespace
+FR-11 & The system shall allow an administrator to configure per-project integrations
+for project management, code quality and continuous integration tools, with the
+version-control credential inherited from the workspace \\
+\addlinespace
+FR-12 & The system shall mask credential values in all responses by default, and
+shall reveal a credential only through an explicit administrator-restricted request
+\\
+\end{longtable}
+
+\subsubsection{Metric Ingestion}
+
+\begin{longtable}{
+  >{\raggedright\arraybackslash}p{0.08\textwidth}
+  >{\raggedright\arraybackslash}p{0.78\textwidth}
+}
+\caption{Functional requirements: metric ingestion}
+\label{tab:fr-ingestion}\\
+\toprule
+\textbf{ID} & \textbf{Requirement} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{ID} & \textbf{Requirement} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+FR-13 & The system shall allow a user to trigger an immediate synchronisation of a
+project across all of its configured tools \\
+\addlinespace
+FR-14 & The system shall retrieve metrics from a version-control platform, an
+issue-tracking platform, a static code-analysis service and a continuous-integration
+service \\
+\addlinespace
+FR-15 & The system shall record each synchronisation as an immutable, timestamped
+project snapshot with the metrics retrieved from each tool \\
+\addlinespace
+FR-16 & The system shall report synchronisation progress to the user interface in
+real time, indicating the status of each tool individually \\
+\addlinespace
+FR-17 & The system shall allow a user to navigate away from or reload the page during
+a synchronisation and reattach to its progress \\
+\addlinespace
+FR-18 & The system shall automatically synchronise every configured project on a
+configurable daily schedule without user intervention \\
+\addlinespace
+FR-19 & The system shall complete a synchronisation and record the data successfully
+retrieved when one or more individual tools fail, reporting the outcome as partial \\
+\end{longtable}
+
+\subsubsection{Health Scoring and Presentation}
+
+\begin{longtable}{
+  >{\raggedright\arraybackslash}p{0.08\textwidth}
+  >{\raggedright\arraybackslash}p{0.78\textwidth}
+}
+\caption{Functional requirements: health scoring and presentation}
+\label{tab:fr-scoring}\\
+\toprule
+\textbf{ID} & \textbf{Requirement} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{ID} & \textbf{Requirement} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+FR-20 & The system shall compute seven health scores per snapshot --- security,
+reliability, maintainability, CI/CD and deployment health, team health, engineering
+process, and planning and execution --- each on a 0--100 scale where a higher value
+indicates better health \\
+\addlinespace
+FR-21 & The system shall compute an overall health score for each snapshot from the
+seven dimension scores \\
+\addlinespace
+FR-22 & The system shall compute scores from the metrics actually available for a
+snapshot, redistributing the weight of unavailable metrics across those present \\
+\addlinespace
+FR-23 & The system shall persist computed scores against the snapshot from which they
+were derived \\
+\addlinespace
+FR-24 & The system shall present a portfolio view listing all accessible projects
+with their overall score, dimension scores and trend \\
+\addlinespace
+FR-25 & The system shall present a per-project dashboard showing the current score,
+its trend, the dimension scores and their history over time \\
+\addlinespace
+FR-26 & The system shall present, on request, a breakdown of any dimension score
+identifying the contributing metrics, their measured values, their applied weights
+and their individual contributions \\
+\end{longtable}
+
+\subsubsection{Team Feedback Surveys}
+
+\begin{longtable}{
+  >{\raggedright\arraybackslash}p{0.08\textwidth}
+  >{\raggedright\arraybackslash}p{0.78\textwidth}
+}
+\caption{Functional requirements: team feedback surveys}
+\label{tab:fr-surveys}\\
+\toprule
+\textbf{ID} & \textbf{Requirement} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{ID} & \textbf{Requirement} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+FR-27 & The system shall generate survey questions automatically, informed by the
+project's current health scores, their trend since the previous synchronisation, andnotable operational conditions detected in the latest metrics \\
+\addlinespace FR-28 & The system shall filter generated questions for duplication and assess their
+quality, discarding those below a configurable quality threshold \\
+\addlinespace
+FR-29 & The system shall allow an authorised reviewer to edit the generated questions before dispatch, and shall prevent further editing once the survey has been distributed \\ \addlinespace                                                               FR-30 & The system shall distribute one scheduled pulse survey per project per month, at a time selected within a configurable window and fixed once assigned \\
+\addlinespace FR-31 & The system shall allow an authorised user to dispatch an additional survey on
+demand, subject to a configurable monthly limit per project \\
+\addlinespace
+FR-32 & The system shall distribute a survey as a single anonymous link, broadcast to
+configured team communication channels and emailed to eligible project developers \\
+\addlinespace                                                                        
+FR-33 & The system shall not email a developer a survey within a configurable
+cooldown period of their previous survey email, and shall rotate fairly between the  
+projects a developer belongs to \\
+\addlinespace                                                                        
+FR-34 & The system shall accept anonymous responses through a time-limited link that
+expires at a configurable deadline \\                                                
+\addlinespace
+FR-35 & The system shall close a survey at its deadline or on demand and produce an  
+analysis comprising dimension scores, recurring themes, a narrative summary and a
+per-question summary \\                                                              
+\addlinespace
+FR-36 & The system shall flag a project as due for a survey when defined health      scores fall below configured thresholds \\
+\end{longtable}
+
+\subsubsection{Management Action Log}
+
+\begin{longtable}{
+  >{\raggedright\arraybackslash}p{0.08\textwidth}
+  >{\raggedright\arraybackslash}p{0.78\textwidth}
+}
+\caption{Functional requirements: management action log}
+\label{tab:fr-actions}\\
+\toprule
+\textbf{ID} & \textbf{Requirement} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{ID} & \textbf{Requirement} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+FR-37 & The system shall allow a user to record a management action comprising the
+problem observed, its assessed cause, the action taken, the date, and the projects
+affected \\
+\addlinespace
+FR-38 & The system shall list recorded actions per project and across the company,
+scoped to the user's role \\
+\addlinespace
+FR-39 & The system shall allow actions to be searched by keyword, and shall
+additionally offer a semantic search that retrieves conceptually related actions \\
+\addlinespace
+FR-40 & The system shall prompt the author of an action to rate its effectiveness
+after a defined review interval, and shall allow that review to be deferred \\
+\addlinespace
+FR-41 & The system shall allow a member to modify or delete actions they recorded,
+and an administrator to do so for any action within their company \\
+\end{longtable}
+
+\subsection{Non-Functional Requirements}
+\label{subsec:non-functional-requirements}
+
+\begin{longtable}{
+  >{\raggedright\arraybackslash}p{0.08\textwidth}
+  >{\raggedright\arraybackslash}p{0.78\textwidth}
+}
+\caption{Non-functional requirements}
+\label{tab:nfr}\\
+\toprule
+\textbf{ID} & \textbf{Requirement} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{ID} & \textbf{Requirement} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+\multicolumn{2}{l}{\textit{Security}} \\
+\addlinespace
+NFR-01 & Access tokens and credential material shall be encrypted at rest \\
+\addlinespace
+NFR-02 & User passwords shall be stored only as salted cryptographic hashes and shall
+never be recoverable \\
+\addlinespace
+NFR-03 & Session identifiers shall be transmitted in cookies inaccessible to
+client-side scripts, shall expire after a defined period of inactivity, and shall be
+revocable \\
+\addlinespace
+NFR-04 & Credential values shall not appear in API responses except through the
+explicit reveal action of FR-12, and shall never be written to application logs \\
+\addlinespace
+NFR-05 & Endpoints accessible without authentication shall be rate-limited \\
+\addlinespace
+NFR-06 & Survey access links shall be tamper-evident, such that modification of an
+embedded identifier or deadline invalidates the link \\
+\addlinespace
+\multicolumn{2}{l}{\textit{Privacy}} \\
+\addlinespace
+NFR-07 & A survey response shall not be attributable to the individual who submitted
+it, and no stored association between respondent identity and response content shall
+exist \\
+\addlinespace
+NFR-08 & Aggregate survey insight shall be reported only where the number of
+responses meets a configured minimum \\
+\addlinespace
+NFR-09 & Data transmitted to third-party analysis services shall not include the
+names of individuals or identifiers of specific work items \\
+\addlinespace
+\multicolumn{2}{l}{\textit{Reliability}} \\
+\addlinespace
+NFR-10 & The failure of one tool during a synchronisation shall not prevent the
+remaining tools from being processed and recorded \\
+\addlinespace
+NFR-11 & Background jobs shall be retried automatically on failure with an increasing
+delay between attempts \\
+\addlinespace
+NFR-12 & Scheduled synchronisation shall be idempotent, such that a repeated or
+retried schedule trigger does not duplicate work for the same project and time slot
+\\
+\addlinespace
+NFR-13 & The system shall degrade gracefully when optional external services are
+unconfigured or unavailable, substituting reduced functionality rather than failing
+\\
+\addlinespace
+NFR-14 & Multi-step operations that cannot be performed atomically shall reverse
+their partial effects on failure \\
+\addlinespace
+\multicolumn{2}{l}{\textit{Performance and Efficiency}} \\
+\addlinespace
+NFR-15 & Calls to external APIs shall be issued with bounded concurrency \\
+\addlinespace
+NFR-16 & The system shall observe the rate limits published by external providers,
+and shall stagger projects that share a credential so that a scheduled run does not
+exhaust a single credential's quota \\
+\addlinespace
+NFR-17 & Dashboard views shall be served from stored snapshot data and shall not
+block on live calls to external tools \\
+\addlinespace
+\multicolumn{2}{l}{\textit{Usability}} \\
+\addlinespace
+NFR-18 & A manager shall be able to assess routine project status without opening any
+of the underlying tools \\
+\addlinespace
+NFR-19 & The progress of a running synchronisation shall be visible to the user, with
+per-tool status \\
+\addlinespace
+NFR-20 & Any presented score shall be explainable on demand in terms of its
+contributing metrics \\
+\addlinespace
+\multicolumn{2}{l}{\textit{Maintainability}} \\
+\addlinespace
+NFR-21 & Support for an additional tool provider shall be addable without
+modification of the scoring logic \\
+\addlinespace
+NFR-22 & The scoring rules for each health dimension shall be documented and covered
+by automated tests \\
+\addlinespace
+NFR-23 & Every change shall be validated automatically for type correctness, static
+analysis compliance, successful build and passing tests before it is merged \\
+\addlinespace
+\multicolumn{2}{l}{\textit{Portability and Deployability}} \\
+\addlinespace
+NFR-24 & All environment-specific configuration shall be supplied externally, with no
+credential or endpoint hard-coded in source \\
+\addlinespace
+NFR-25 & The server components shall be deployable as containers \\
+\addlinespace
+NFR-26 & Scheduling shall be configurable to an arbitrary named time zone,
+independent of the host's clock \\
+\end{longtable}
+
+\subsection{Constraints}
+\label{subsec:constraints}
+
+\begin{longtable}{
+  >{\raggedright\arraybackslash}p{0.06\textwidth}
+  >{\raggedright\arraybackslash}p{0.13\textwidth}
+  >{\raggedright\arraybackslash}p{0.67\textwidth}
+}
+\caption{Project constraints}
+\label{tab:constraints}\\
+\toprule
+\textbf{ID} & \textbf{Category} & \textbf{Constraint and implication} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{ID} & \textbf{Category} & \textbf{Constraint and implication} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+C-01 & Time & Development spanned two academic semesters, approximately twelve
+months, undertaken alongside concurrent coursework rather than full-time. This
+required incremental delivery and forced explicit deferral of lower-priority
+capability \\
+\addlinespace
+C-02 & Human resources & The team comprised five students with no dedicated
+operations, quality-assurance or design specialists; all such responsibilities were
+absorbed by the same five members \\
+\addlinespace
+C-03 & Budget & No monetary budget was available. Every external service ---
+database, cache, hosting, AI inference, email delivery and code analysis --- had to
+operate within a free service tier. This constrained hosting to a single application
+instance without redundancy, and bounded the volume of AI inference and external API
+traffic the system could consume \\
+\addlinespace
+C-04 & Platform & The implementation targets a Node.js runtime with TypeScript.
+Persistence uses a managed PostgreSQL service accessed through a REST client, which
+does not expose multi-statement transactions across tables; operations spanning
+several tables therefore require explicit compensating logic. An in-memory data store
+is required for both job queuing and session storage, making it a hard runtime
+dependency \\
+\addlinespace
+C-05 & Data availability & The system can only measure what the external tools
+expose. Several intended metrics are unobtainable in practice: security alert counts
+are unavailable where the repository has not enabled the relevant scanning feature;
+test coverage is reported only where the project's pipeline publishes a coverage
+report; and certain issue-tracker fields are instance-specific custom fields whose
+identifiers vary between organisations \\
+\addlinespace
+C-06 & Data history & No historical backfill is possible from the source tools for most metrics. Trend data therefore accumulates only from the first synchronisation onward, meaning the system's analytical value increases over time and is limited immediately after adoption \\
+\addlinespace
+C-07 & Integration access & The system operates strictly read-only against the partner's tools using access tokens, with no ability to install agents, configure webhooks or otherwise modify the partner's infrastructure \\
+\addlinespace
+C-08 & Deployment & The system is deployed to managed cloud platforms --- a container platform for the server components, a static hosting platform for the client application, and managed cache and database services. At the time of writing it is hosted and operational but has not yet been handed over to [PARTNER] for production use \\
+\addlinespace
+C-09 & Confidentiality & Work is conducted under a non-disclosure agreement with [PARTNER], which governs the handling of their data and the disclosure of information in this report. The obligations arising from it are addressed in Section~\ref{sec:standards} \\
+\end{longtable}
 
 \section{Regulatory Requirements and Standards}
 \label{sec:standards}

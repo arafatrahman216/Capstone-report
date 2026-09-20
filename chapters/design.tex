@@ -1719,10 +1719,196 @@ described in \Cref{sec:architecture}, with the automated pipeline handling type,
 style and test conformance so that review attention was spent on design rather
 than on mechanical defects.
 
+% \section{Deployment}
+% \label{sec:deployment}
+% \guidance{Describe how the system is deployed and operated: the target
+% environment and infrastructure, configuration and release process,
+% monitoring and backup, and who operates and maintains it. State the
+% computing resources the deployment consumes; their environmental impact is
+% assessed in \Cref{sec:sustainability}.}
+
 \section{Deployment}
 \label{sec:deployment}
-\guidance{Describe how the system is deployed and operated: the target
-environment and infrastructure, configuration and release process,
-monitoring and backup, and who operates and maintains it. State the
-computing resources the deployment consumes; their environmental impact is
-assessed in \Cref{sec:sustainability}.}
+
+\subsection{Target Environment and Infrastructure}
+\label{subsec:target-environment}
+
+The system is deployed across four managed platforms, none of which requires the
+team to operate a server directly. The two server processes run as containers on
+a platform that supports long-lived processes, which the worker requires because
+it holds open queue connections and cannot be expressed as a request-triggered
+function. The client is served as static assets by a separate platform, which
+also proxies API requests to the backend so that the browser treats both as one
+origin. Persistent state is held in a managed PostgreSQL service and a managed
+Redis service.
+
+\begin{longtable}{
+  >{\raggedright\arraybackslash}p{0.22\textwidth}
+  >{\raggedright\arraybackslash}p{0.26\textwidth}
+  >{\raggedright\arraybackslash}p{0.36\textwidth}
+}
+\caption{Deployed components and their hosting}
+\label{tab:deployment}\\
+\toprule
+\textbf{Component} & \textbf{Hosting} & \textbf{Role} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Component} & \textbf{Hosting} & \textbf{Role} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+API process & Container platform, free tier & Serves the client, authenticates users,
+streams progress \\
+Worker process & Container platform, free tier & Runs synchronisation, scheduling,
+survey and embedding jobs \\
+Client application & Static hosting platform, hobby tier & Serves the single-page
+application and proxies API requests \\
+PostgreSQL & Managed database service, free tier & Snapshots, scores, surveys,
+actions and embeddings \\
+Redis & Managed cache service, free tier & Job queues, progress channels and sessions
+\\
+\end{longtable}
+
+Both server processes are built from the same container image, which installs
+dependencies reproducibly from the lockfile and runs the application through a
+TypeScript loader rather than from a compiled build. The image declares the API
+as its default command, and the worker is started by overriding that command on
+its own service. Running the loader in production keeps the deployed artefact
+identical to the source but carries a startup cost that a compiled artefact would
+not, and requires the build tooling to be present at runtime.
+
+\subsection{Configuration}
+\label{subsec:configuration}
+
+All environment-specific values are supplied as environment variables. A documented example file lists every variable
+with its purpose and default. A single configuration module reads them once at
+startup, applies bounds to numeric values, and validates those whose malformation
+would otherwise surface much later as silent misbehaviour. A scheduling time that
+does not parse, or a time zone that the runtime does not recognise, causes a
+startup failure rather than a schedule that simply never fires.
+
+Configuration differs between the two server processes in one respect. Both load
+the same variables, but the worker binds its health endpoint to a separate port
+so that the two can run side by side locally without contending for the same
+socket.
+
+The hosting platforms themselves are configured through their web consoles rather
+than from files in the repository. No infrastructure definition is committed, so
+the deployed topology cannot be reconstructed from the repository alone, and
+recreating it requires manual configuration. This is acceptable at the present
+scale but is a limitation worth recording ahead of handover.
+
+\subsection{Release Process}
+\label{subsec:release-process}
+
+The continuous integration pipeline described in \Cref{sec:implementation} does
+not perform deployment. Both hosting platforms build directly from the repository
+when the main branch changes, so the pipeline acts as a gate on what reaches that
+branch rather than as the mechanism that ships it. A change therefore reaches
+production by being merged, having first passed type checking, linting, building
+and the test suites.
+
+\subsection{Monitoring}
+\label{subsec:monitoring}
+
+The API exposes a health endpoint that reports its own availability together with
+the status of its dependencies, covering database connectivity and whether the
+optional semantic search and reranking services are configured. The worker
+exposes a minimal health endpoint of its own so that the hosting platform can
+confirm the process is alive.
+
+Both processes emit structured logs throughout the request and job lifecycle,
+with each entry carrying the component that produced it and the identifiers
+needed to correlate a synchronisation across processes. Credential values are
+never logged, and where a credential is used as a grouping key it is reduced to a
+truncated one-way hash first. The hosting platform retains and displays these
+logs.
+
+Beyond this, no monitoring exists. There is no log aggregation across the two
+processes, no alerting on error conditions, and no uptime or performance
+monitoring beyond what the platforms provide by default. Diagnosis therefore
+depends on someone inspecting logs after a problem is reported rather than on
+being notified when one occurs. This is recorded as gap G-07 in
+\Cref{sec:standards} and is attributable to the absence of budget for monitoring
+infrastructure under constraint C-03.
+
+\subsection{Backup and Recovery}
+\label{subsec:backup}
+
+\textbf{[To be completed. State what backup arrangement actually exists. The
+repository contains no backup configuration, so the position is whatever the
+managed database provider performs by default on its free tier. Confirm from the
+provider's console whether automated backups are taken, at what frequency, and
+with what retention, then state it plainly. If no backup is configured beyond the
+provider's defaults, say so and note it as a risk to be addressed before the
+system holds production data for the partner.]}
+
+The data most costly to lose differs by store. The database holds the accumulated
+snapshot history, which cannot be reconstructed because the source tools do not
+expose historical values for most metrics, as recorded in constraint C-06. The
+cache holds only transient state, namely queued jobs, progress channels and
+sessions, all of which can be lost without permanent consequence. Users would be
+required to sign in again and any synchronisation in flight would need to be
+repeated.
+
+\subsection{Operation and Maintenance}
+\label{subsec:operation}
+
+The system is currently operated by the development team, who hold the accounts
+for all four hosting platforms and are responsible for configuration changes,
+credential rotation and diagnosis of failures.
+
+\textbf{[To be completed. State the intended arrangement after handover. Whether
+the partner assumes operation and the platform accounts are transferred to them,
+whether the team continues to operate it during a transition period, and what
+documentation or briefing accompanies the handover.]}
+
+Routine maintenance obligations are modest but real. Access tokens held for the 
+tools expire and must be rotated through the settings interface. The
+language model and embedding provider deprecate model versions on their own
+schedule, which requires the configured model to be updated and, for embeddings,
+a new version to be generated and backfilled. Dependency updates are not
+currently automated, as recorded in gap G-06.
+
+\subsection{Computing Resources Consumed}
+\label{subsec:resources-consumed}
+
+\Cref{tab:resource-consumption} records the resources the deployment consumes.
+Storage and request figures follow from the design calculations in
+\Cref{subsec:design-calculations}. Their environmental impact is assessed in
+\Cref{sec:sustainability}.
+
+\begin{longtable}{
+  >{\raggedright\arraybackslash}p{0.24\textwidth}
+  >{\raggedright\arraybackslash}p{0.28\textwidth}
+  >{\raggedright\arraybackslash}p{0.32\textwidth}
+}
+\caption{Computing resources consumed by the deployment}
+\label{tab:resource-consumption}\\
+\toprule
+\textbf{Resource} & \textbf{Allocation} & \textbf{Observed or estimated use} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Resource} & \textbf{Allocation} & \textbf{Observed or estimated use} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+API process & One instance, free tier, suspended when idle & \textbf{[memory and CPU
+from console]} \\
+Worker process & One instance, free tier & Active during scheduled runs and on
+demand, otherwise idle \\
+Database storage & 500 MB free tier & \textbf{[current size from console]}, growingby approximately 2.7 MB per project-year \\
+Cache memory & Free tier & Under 1 MB working set \\
+Client bandwidth & Hobby tier & \textbf{[bandwidth from console]} \\
+External API requests & Provider rate limits & Approximately 210 to 260 version-control requests per synchronisation \\
+Scheduled compute & One run per project per day & Approximately 25 to 40 minutes of worker time for a 25-project portfolio \\
+\end{longtable}
+
+The deployment runs two always-provisioned single-instance processes with no
+redundancy, and its resource profile is dominated not by serving users but by the
+scheduled synchronisation, which accounts for nearly all sustained processing and
+essentially all external network traffic.

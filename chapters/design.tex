@@ -358,13 +358,164 @@ consumption is the same. The resources the deployment consumes are quantified in
 \Cref{sec:deployment}, and their environmental impact assessed in
 \Cref{sec:sustainability}.
 
+% \section{Design Refinement and Simulation}
+% \label{sec:detailed-design}
+% \guidance{Present the detailed design using the views that fit the project (ERD,
+% class, sequence, DFD, API, wireframes, circuit, model). Include any design
+% calculations or estimates made (e.g. expected load or storage), the
+% analyses, prototypes, or simulations used to verify the design against the
+% requirements, and how the design was refined to facilitate implementation.}
+
+
 \section{Design Refinement and Simulation}
 \label{sec:detailed-design}
-\guidance{Present the detailed design using the views that fit the project (ERD,
-class, sequence, DFD, API, wireframes, circuit, model). Include any design
-calculations or estimates made (e.g. expected load or storage), the
-analyses, prototypes, or simulations used to verify the design against the
-requirements, and how the design was refined to facilitate implementation.}
+
+This section presents the detailed design through the views that carry the most
+information about this system such as the structure of the two extensible layers, the
+data model, the synchronisation sequence, and the external interface. It then
+records the storage and load estimates made during design, the means by which the
+design was checked against its requirements, and the refinements made to the
+design during implementation.
+
+\subsection{Structure of the Connector and Scoring Layers}
+\label{subsec:connector-scoring-structure}
+
+\Cref{fig:connector-scoring} shows the internal structure of the two layers that
+carry the system's extensibility, and the path by which data travels from one to
+the other. External tool APIs are omitted here; they appear in
+\Cref{fig:architecture}.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[
+  font=\footnotesize,
+  iface/.style={draw, rounded corners=1pt, align=center, text width=50mm,
+                inner sep=1.6mm},
+  cls/.style={draw, align=left, text width=32mm, inner sep=1.6mm},
+  ghost/.style={draw, dashed, align=left, text width=32mm, inner sep=1.6mm},
+  store/.style={draw, rounded corners=2pt, align=center, text width=32mm,
+                inner sep=1.8mm},
+  arr/.style={-{Stealth[length=2mm]}, thick},
+  real/.style={-{Triangle[open, length=2.6mm]}, dashed, thin},
+  % step/.style={font=\scriptsize\bfseries, fill=white, inner sep=1pt}
+  flowstep/.style={font=\scriptsize\bfseries, fill=white, inner sep=1pt}
+]
+
+
+%% ---------- centre: worker and store ----------
+\node[store] (proc) at (0mm,0mm) {\textbf{Sync processor}\\[1pt]
+  {\scriptsize worker process}};
+\node[store, text width=34mm] (snap) at (0mm,-52mm)
+  {\textbf{Project snapshot}\\[1pt]
+   {\scriptsize normalised metrics per tool}\\
+   {\scriptsize + seven scores}};
+
+%% ---------- left: connector layer ----------
+\node[iface] (reg) at (-48mm,0mm) {\texttt{createConnector(tool)}\\[1pt]
+  {\scriptsize registry: name $\rightarrow$ implementation}};
+\node[iface] (iface) at (-48mm,-30mm)
+  {{\scriptsize\itshape interface}\\ \texttt{IConnector}\\[1pt]
+   {\scriptsize \texttt{getData()}}};
+\node[cls] (impl) at (-48mm,-60mm) {\textbf{Implemented}\\[1pt]
+  {\scriptsize GitHubConnector (VCS)}\\
+  {\scriptsize JiraConnector (PM)}\\
+  {\scriptsize SonarQubeConnector (quality)}\\
+  {\scriptsize GithubActionsConnector (CI/CD)}};
+\node[ghost] (future) at (-48mm,-90mm) {\textbf{Further providers}\\[1pt]
+  {\scriptsize implement the interface, register once}};
+
+%% ---------- right: scoring layer ----------
+\node[store] (rcs) at (52mm,-52mm) {\textbf{Risk calculation service}\\[1pt]
+  {\scriptsize shapes stored metrics into typed inputs}};
+\node[iface] (engine) at (52mm,-80mm) {\texttt{RiskEngine}\\[1pt]
+  {\scriptsize dispatch by \texttt{RiskType}}};
+\node[iface] (rcalc) at (52mm,-100mm)
+  {{\scriptsize\itshape interface}\\ \texttt{RiskCalculator<TMetrics>}};
+\node[cls] (strat) at (52mm,-130mm) {\textbf{Seven strategies}\\[1pt]
+  {\scriptsize Security, Reliability, Maintainability,}\\
+  {\scriptsize CI/CD, Team Health, Engineering}\\
+  {\scriptsize Process, Planning and Execution}};
+\node[cls] (util) at (52mm,-160mm) {\textbf{Shared scoring functions}\\[1pt]
+  {\scriptsize normalisers, null-aware weighting}};
+
+%% ---------- realisation: orthogonal spine at x = -70mm ----------
+\draw[real] (impl.west)   -- (-80mm,-60mm)  -- (-80mm,-30mm) -- (iface.west);
+% \draw[real] (stub.west)   -- (-70mm,-90mm)  -- (-70mm,-30mm) -- (iface.west);
+\draw[real] (future.west) -- (-80mm,-90mm) -- (-80mm,-30mm) -- (iface.west);
+\draw[real] (strat.north) -- (rcalc.south);
+
+%% ---------- flow ----------
+\draw[arr] (proc.west) -- node[flowstep, above] {1} (reg.east);
+\draw[arr] (reg.south) -- (iface.north);
+\draw[arr] (iface.east) -- node[flowstep, above right] {2} (proc.south west);
+\draw[arr] (proc.south) -- node[flowstep, right] {3} (snap.north);
+\draw[arr] (snap.east) -- node[flowstep, above] {4} (rcs.west);
+\draw[arr] (rcs.south) -- node[flowstep, right] {5} (engine.north);
+\draw[arr] (engine.east) -- (80mm,-80mm) -- (80mm,-130mm) -- (strat.east);
+\draw[arr] (strat.south) -- (util.north);
+\draw[arr] (rcs.north west) to[bend left=30]
+  node[flowstep, above] {6} (snap.north east);
+\end{tikzpicture}
+
+\caption{Structure of the connector and scoring layers. The worker depends only
+on the \texttt{IConnector} interface, never on a specific provider (1--2);
+normalised metrics are written to the snapshot (3) and read back from it for
+scoring (4--6), so the two layers never reference each other directly.}
+\label{fig:connector-scoring}
+\end{figure}
+
+\paragraph{The connector extension point.}
+Every provider implementation satisfies one interface, \texttt{IConnector},
+declaring a single method that returns a normalised metric object. A registry maps
+each supported tool name to the function that constructs its implementation, and
+the sync processor obtains a connector only through that registry. The
+consequence is that the worker contains no reference to any specific provider, 
+it names a tool, receives something satisfying the interface, and calls one method
+on it. Provider-specific concerns, GitHub's separate REST and GraphQL rate
+budgets, Jira's instance-specific custom field identifiers, SonarQube's paginated
+measure history, are confined entirely within their own implementations.
+
+Adding a provider therefore costs one class and one registry entry, with no
+change to the sync processor, the persistence layer or the scoring engine. This
+is what satisfies O-07 and NFR-21.
+
+\paragraph{Decoupling of ingestion from scoring.}
+The connector layer and the risk engine never communicate directly. The worker
+writes each tool's normalised output to the project snapshot, and the risk
+calculation service subsequently reads those stored metrics back out, shapes them
+into the typed input object each strategy expects, and invokes the engine. The
+snapshot is the integration point between ingestion and scoring.
+
+This indirection is deliberate, and it buys three properties. Scoring becomes
+reproducible. Since the inputs are stored rather than consumed in flight, a
+score can be recomputed at any later time from the snapshot that produced it,
+without contacting any external tool, which is how the per-metric score
+breakdown of FR-26 is served months after the data was collected. Scoring also
+becomes independently revisable. The weighting rules can change and be re-applied
+to historical snapshots, because the raw evidence was retained. And a failure in
+either layer is harmless to the other. A connector fault costs one tool's metrics for one
+snapshot, while a scoring fault leaves the ingested data intact for later
+recomputation.
+
+\paragraph{The scoring extension point.}
+The risk engine mirrors the connector layer's shape. Each of the seven dimensions
+is an independent strategy implementing \texttt{RiskCalculator<TMetrics>},
+generic in the metric type it consumes, and the engine dispatches to the
+appropriate one by enumeration member. Each strategy declares its inputs as a
+list of weighted signals and delegates the arithmetic to a shared set of
+normalisation functions and a common null-aware weighting routine, so that the
+behaviour on missing data (FR-22) is implemented once and identically for every
+dimension rather than restated seven times.
+
+A dimension's weights or thresholds can therefore be changed by editing one
+strategy, and a dimension can be added by writing one class and one enumeration
+member. That this holds in practice was demonstrated during development, when the
+scoring model was restructured from six categories to seven, the change was
+confined to the strategy layer and the score persistence schema, leaving
+ingestion, the queue, the progress stream and the client untouched.
+
+
+
 
 \section{Application of Tools}
 \label{sec:tools}

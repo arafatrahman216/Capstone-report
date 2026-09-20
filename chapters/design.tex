@@ -1564,6 +1564,161 @@ as well as in development.
 % \guidance{Describe how the key modules were implemented and the development
 % process followed (repository, version control, code review, CI/CD).}
 
+
+\section{Implementation}
+\label{sec:implementation}
+
+\subsection{Implementation of the Key Modules}
+\label{subsec:module-implementation}
+
+\paragraph{Connector layer.}
+Each connector is a class satisfying the single-method interface described in
+\Cref{subsec:connector-scoring-structure}, responsible for turning one provider's
+API into the normalised metric object its category defines. The version-control
+connector is the largest, and combines both of the provider's interfaces. REST
+for resources that paginate simply, such as commits and closed issues, and
+GraphQL for those where a single query can retrieve a nested structure that REST
+would require many round trips to assemble such as pull requests together with their
+reviews, review comments and discussion threads. Requests that must be issued per
+item, most notably the file list of each commit, are dispatched through a shared
+bounded-concurrency helper rather than all at once, which is what keeps a
+synchronisation within the request budget calculated in
+\Cref{subsec:design-calculations}.
+
+Every connector observes one discipline consistently, i.e., a metric that cannot be
+determined is reported as \texttt{null}, never as zero. The distinction matters
+downstream, because the scoring layer excludes a null metric and redistributes
+its weight, whereas a zero would be scored as the worst possible value. This is
+why, for example, the security alert count is null for a repository with
+scanning disabled rather than being reported as no alerts.
+
+\paragraph{Risk engine.}
+Each of the seven dimensions is implemented as a strategy class that declares its
+inputs as a list of weighted signals. A signal pairs a weight with a
+normalised score, produced by applying one of six shared normalisation functions
+to the raw metric, e.g. a rating converted to a scale, a count divided by project
+size, a value interpolated between good and bad reference points, a value capped
+once a target is reached, or a value scored by proximity to an ideal midpoint.
+The strategy then delegates to a shared routine that discards absent signals,
+rescales the remaining weights to sum to one, and returns both the score and the
+weights actually applied. Because that routine returns the effective weights
+rather than the declared ones, the per-metric breakdown of FR-26 is available
+without any separate bookkeeping.
+
+Two dimensions (engineering process, and planning and execution) are
+computed as two independently weighted sub-groups combined afterwards using the
+same routine one level up, so that a project with no issue-tracker data falls
+back to its other sub-group rather than being scored as though half its inputs
+were failing.
+
+\paragraph{Synchronisation pipeline and progress streaming.}
+The worker's synchronisation processor orchestrates one run. It fetches from the
+configured tools concurrently, creates the snapshot once at least one fetch has
+succeeded, writes each tool's output against that snapshot sequentially, then
+invokes scoring. Each stage publishes an event to a Redis channel named for the
+client's session. The API process holds the browser connection and subscribes to
+that channel, relaying each event over Server-Sent Events; the completion event
+is additionally stored under a session key with a one-hour expiry, so a client
+that reconnects after the run has finished is served the stored outcome
+immediately instead of subscribing to a channel that will not speak again.
+
+Failure is handled per tool rather than per run. A connector that throws is
+recorded as failed, its failure is published, and the remaining tools proceed;
+the run's reported outcome is derived from which tools succeeded, and is further
+downgraded if scoring itself failed, so that a run which gathered data but
+produced no usable score is not reported as fully successful.
+
+\paragraph{Survey subsystem.}
+The survey feature is implemented across three queues and an hourly scheduled
+tick. The tick assigns each project a randomised send moment within the
+configured monthly window, fixing it on the survey row so it is decided once
+rather than re-rolled; generates questions a configured number of days before
+that moment; and dispatches at the moment itself. Question generation is a
+pipeline rather than a single call. Candidates are generated, near-duplicates are
+removed by a token-similarity comparison before any further paid call is made,
+the survivors are scored by the model across four quality dimensions, those below
+a threshold are discarded, and the remainder are selected preferring category
+diversity. Dispatch mints an encrypted link token, broadcasts it once to the
+configured team channels, and emails eligible developers individually, skipping
+those inside their cooldown or owed a turn on another project.
+
+\paragraph{Semantic action search.}
+Recording an action enqueues an embedding job, which claims the work atomically
+through a database function so that a retried job cannot embed twice, requests a
+vector from the embedding provider, and stores it against the action keyed by
+model version. Search has two modes. A lexical mode that queries the database
+directly, and a deep mode that retrieves candidates within the caller's scope and
+reranks them through a hosted reranking service. The deep path degrades to the
+lexical one whenever reranking is unconfigured or unavailable, so the feature has
+no hard dependency on either external service.
+
+\paragraph{Security-related implementation.}
+Credential encryption is applied inside the data-access functions rather than at
+the call sites, so that every module above that boundary handles plaintext and
+none can persist an unencrypted value. Ciphertexts carry a version prefix, which
+allowed encryption to be introduced without backfilling existing rows. Sessions
+are opaque identifiers stored in Redis against the user record, held in the
+browser as \texttt{httpOnly} cookies, and indexed by user so that a password
+reset can revoke every session that user holds.
+
+\subsection{Development Process}
+\label{subsec:development-process}
+
+\paragraph{Repository organisation.}
+The project is held in a single Git repository containing two independently
+installable packages, one for the server and one for the client, each with its
+own dependency manifest, TypeScript configuration and lint configuration. Within
+the server package, code is separated into \texttt{apps}, holding the two runnable
+processes, and \texttt{libs}, holding the domain libraries both processes share which mirrors the separation drawn in \Cref{fig:architecture}. Path aliases allow shared
+code to be imported by a stable name rather than by relative traversal.
+
+\paragraph{Version control workflow.}
+Development proceeded on feature branches merged into \texttt{main} through pull
+requests, of which thirty-six were opened over the course of the project across
+282 commits. Branches were named either for the change they carried
+(e.g., \texttt{cicd-pipeline}, \texttt{feat-secret-encryption}) or for their author
+together with the area worked on (e.g., \texttt{abdullah-score-update},
+\texttt{arafat-survey}); the convention was not fixed at the outset and both
+forms persist. Merges preserve the branch history rather than squashing it, so
+individual commits remain attributable after integration. Alongside the pull
+request flow, some integration occurred by merging \texttt{main} directly into a
+working branch, which appears in the history as ordinary merge commits.
+
+Commit messages follow a conventional prefixed form
+(\texttt{feat(projects): \ldots}) in part of the history and a free-form
+descriptive style elsewhere. The convention was adopted partway through the
+project rather than established at its start, and was not enforced by tooling.
+
+\paragraph{Division of work.}
+Work was partitioned along the module boundaries described in
+\Cref{sec:architecture} rather than arbitrarily. The connector layer, the scoring
+engine, the worker processes, the survey subsystem and the client application
+were each taken up by a principal author, with others contributing. This mapping
+of people onto modules was possible precisely because the modules communicate
+through narrow interfaces, a connector is written against one method
+signature, a scoring strategy against one metric type, so concurrent work on
+different subsystems rarely produced conflicting changes to the same files.
+
+
+\paragraph{Continuous integration.}
+Every pull request and every push to \texttt{main} triggers an automated
+pipeline. It begins by determining which packages a change touches, so that a
+change confined to the client does not run the server checks and vice versa. For
+the server it installs dependencies reproducibly from the lockfile, type-checks,
+lints, builds, and runs the test suites with coverage measurement; for the client
+it installs, type-checks, lints and builds. A final aggregating job succeeds only
+if every job that ran passed, treating a skipped job as acceptable but a failed
+or cancelled one as fatal, which gives a single status check suitable for
+protecting the \texttt{main} branch. Concurrency control cancels any superseded
+run for the same branch, so that only the most recent commit is validated.
+
+\paragraph{Code review.}
+Changes were reviewed by another team member before merging. Review focused on
+correctness of the domain logic and on consistency with the module boundaries
+described in \Cref{sec:architecture}, with the automated pipeline handling type,
+style and test conformance so that review attention was spent on design rather
+than on mechanical defects.
+
 \section{Deployment}
 \label{sec:deployment}
 \guidance{Describe how the system is deployed and operated: the target

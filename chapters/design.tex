@@ -1422,15 +1422,147 @@ historical rows meant the inverse of its recent ones, which is worse than having
 no history at all. Accepting the loss of prior data was the correct trade.
 
 
+% \section{Application of Tools}
+% \label{sec:tools}
+% \guidance{Justify the selection of the important tools and technologies and
+% state their relevant limitations.}
+
+
 \section{Application of Tools}
 \label{sec:tools}
-\guidance{Justify the selection of the important tools and technologies and
-state their relevant limitations.}
 
-\section{Implementation}
-\label{sec:implementation}
-\guidance{Describe how the key modules were implemented and the development
-process followed (repository, version control, code review, CI/CD).}
+The technology selections below were governed by three constraints established in
+\Cref{subsec:constraints}. First, zero budget, so every service had to offer a
+usable free tier (C-03); second, a five-person part-time team, so unfamiliar technology
+carried a real cost (C-01, C-02); and third, no access to the partner's infrastructure,
+so nothing could assume an agent or hosted runner inside their environment
+(C-07). Each selection is justified against those constraints and its limitations
+stated, including several that only became apparent in use.
+
+\subsection{Language and Runtime}
+\label{subsec:tool-runtime}
+
+The server and client are both written in TypeScript on Node.js~20. A single
+language across the API, the worker and the browser client meant that five
+ developers moved between layers without a context switch, and more
+substantively, that the contract between the connector layer and the scoring
+layer is enforced by the compiler. Each scoring strategy declares the metric
+object it consumes, so supplying a strategy with the wrong metric shape fails at
+build time rather than producing a silently wrong number. Node's ecosystem also
+provided official SDKs for the version-control provider, which removed a
+substantial amount of pagination and authentication work.
+
+\subsection{Server Framework and Integration SDKs}
+\label{subsec:tool-server}
+
+Express was chosen for the API for two reasons. Its middleware model matched the
+cross-cutting concerns the system needed. Session resolution, tenancy scoping,
+security headers, rate limiting, each of which is applied once rather than
+per handler. And because Express exposes the raw response object, the
+Server-Sent Events endpoint could be implemented directly, holding a connection
+open and writing events as they arrive, without fighting an abstraction designed
+around request-response.
+
+Version-control access uses the provider's official SDK with its throttling and
+retry plugins. The throttling plugin reads rate-limit information from the headers
+of responses already in flight, which replaced an earlier approach in this codebase
+that issued a separate rate-limit query before each guarded call which roughly
+doubles the request count while not actually throttling, since concurrent callers
+each observed the limit independently and each waited in parallel.
+
+
+\subsection{Data Persistence}
+\label{subsec:tool-database}
+
+PostgreSQL was selected for a workload that is genuinely relational at its core. Companies own projects and projects own snapshots, but each connector returns a different nested metric document. PostgreSQL serves both. Conventional columns and foreign keys for the entity structure, and \texttt{jsonb} for the metric payloads. It also, through the \texttt{pgvector} extension, stores the action embeddings, which avoided introducing a separate vector database, a significant saving under C-03. Supabase provides it as a managed service with a free tier, accessed over a REST interface that requires no connection pool, which suits a deployment that may be suspended and resumed.
+
+
+\subsection{Queueing, Caching and Scheduling}
+\label{subsec:tool-queue}
+
+Redis serves three purposes with one dependency. It backs the job queues, carries
+the publish/subscribe channels through which synchronisation progress reaches the
+API process, and stores sessions. BullMQ supplies the queue semantics the design
+required without bespoke work, retries with exponential backoff, job priorities so
+scheduled work cannot crowd out a user waiting on a synchronisation, delayed jobs
+for the credential-spacing described in \Cref{subsec:design-calculations},
+deterministic job identifiers for idempotence, and repeatable schedulers for the
+periodic synchronisation.
+
+\paragraph{Limitations.}
+Consolidating three responsibilities onto one dependency also consolidates the
+failure. Because sessions live in Redis, an outage prevents users from logging in
+as well as preventing any work from running. The system has no degraded mode for
+this. BullMQ's repeatable schedulers persist in Redis rather than in code, so a
+schedule registered by an earlier deployment continues firing until explicitly
+removed, which is why the worker reconciles the configured schedule against
+Redis on every start rather than simply registering it. Its priority convention
+is also a trap: an unset priority is treated as the highest, so the scheduled
+work is given an explicit positive value while interactive work is deliberately
+left unset.
+
+\subsection{Client Application}
+\label{subsec:tool-client}
+
+The client is a React single-page application built with Vite and styled with
+Tailwind, using Recharts for the trend visualisations and React Router for
+navigation. React's component model suits a dashboard built from repeated card
+and chart structures, and Recharts is declarative in the same idiom, so chart
+configuration lives alongside the data rather than in imperative lifecycle code.
+Vite's development proxy forwards API calls to the backend, making them
+same-origin during development so that session cookies work without a CORS
+configuration that differs from production.
+
+
+\subsection{External Intelligence and Notification Services}
+\label{subsec:tool-external}
+
+Survey question generation, question scoring and response analysis use Google's
+Gemini models, which were selected because a single provider covers both text
+generation and the embeddings required for semantic action search, and because
+its free tier made both feasible under C-03. Embeddings are stored at 768
+dimensions, the smallest of the provider's recommended sizes, to reduce
+storage and similarity-search cost. Semantic search results are optionally
+reranked by a hosted reranking service, which improves precision over raw cosine
+similarity without hosting a reranking model. Transactional email is delivered
+through an HTTP API rather than SMTP, avoiding connection management, and survey
+links are broadcast to team channels through their respective bot APIs.
+
+\paragraph{Limitations.}
+The language model's output is not deterministic and not guaranteed
+well-formed, so every response is parsed defensively, validated against an
+expected shape, and `for generated questions, those are passed through a quality gate
+before use. The free tier permits the provider to use submitted inputs for
+product improvement, which constrains what may be sent and is discussed in
+\Cref{sec:standards}. There is no service-level guarantee, and model versions are
+deprecated on the provider's schedule rather than the project's; the client is
+therefore isolated behind an interface with a stub implementation, so that the
+system degrades rather than fails when the provider is unavailable or
+unconfigured. The reranking service is likewise optional, falling back to
+keyword search, but it adds latency to the search path and introduces a further
+external processor of partner data. Email deliverability depends on sender
+verification and bounces are not currently handled.
+
+\subsection{Engineering and Delivery Tooling}
+\label{subsec:tool-delivery}
+
+Tests run under Vitest, which reuses the same transform pipeline as the build and
+therefore required no separate TypeScript or module configuration. Static
+analysis uses ESLint with the TypeScript plugin. Continuous integration runs on
+GitHub Actions, where the repository already lives, with path filtering so that a
+change touching only the client does not run the server checks. The server
+components are containerised so that the local and deployed environments differ
+only in configuration. The API and worker are deployed to a container platform
+that runs long-lived processes, which is necessary because the worker must hold queue
+connections and cannot be expressed as a request-triggered function, while the
+client is served as static assets by a separate platform that proxies API
+requests to the backend, so that browser requests are same-origin in production
+as well as in development.
+
+% \section{Implementation}
+% \label{sec:implementation}
+% \guidance{Describe how the key modules were implemented and the development
+% process followed (repository, version control, code review, CI/CD).}
 
 \section{Deployment}
 \label{sec:deployment}

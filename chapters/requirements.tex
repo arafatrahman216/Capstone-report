@@ -899,8 +899,7 @@ security posture was self-assessed. A formal ASVS assessment was not performed
 Table~\ref{tab:compliance-gaps} consolidates the shortfalls identified above.
 Each is classified as \emph{accepted}, where the gap is justified by a project
 constraint and carries tolerable residual risk; or \emph{outstanding}, where
-remediation is required before the system is handed over to [PARTNER] for
-production use.
+remediation is required.
 
 \begin{longtable}{
   >{\raggedright\arraybackslash}p{0.06\textwidth}
@@ -952,7 +951,332 @@ G-07 & No formal OWASP ASVS assessment was conducted; the standard was applied a
 
 \section{Formulation of Solutions}
 \label{sec:alternatives}
-\guidance{Formulate multiple genuinely different solutions that could each
-functionally meet most requirements. Compare and evaluate them against
-explicit criteria from the requirements and constraints, and draw a valid
-conclusion that justifies the selected solution.}
+% \guidance{Formulate multiple genuinely different solutions that could each
+% functionally meet most requirements. Compare and evaluate them against
+% explicit criteria from the requirements and constraints, and draw a valid
+% conclusion that justifies the selected solution.}
+
+\subsection{Approach}
+\label{subsec:formulation-approach}
+
+The requirements and constraints established in Sections~\ref{sec:requirements}
+and~\ref{sec:standards} admit more than one workable system. This section characterises the realistic alternatives, assesses each against criteria
+drawn from those sections, and justifies the selection.
+Two decisions are examined. The first is how the platform obtains and consolidates engineering data, which determines the shape of the whole system and
+is examined in Sections~\ref{subsec:primary-candidates} to~\ref{subsec:primary-selection}. The second is how the collected metrics are
+converted into health scores, which is the analytical core of the product and is examined in Sections~\ref{subsec:secondary-candidates}
+and~\ref{subsec:secondary-selection}.
+The comparison is qualitative rather than numerically weighted. Each criterion is assessed as satisfied,
+partially satisfied, or not satisfied, with the reasoning stated explicitly.
+One element of the analysis is empirical rather than anticipatory. The health
+scoring model was revised during development: an earlier six-category model was replaced by the seven-category model described in this report, following the
+team's own research into which categories the available metrics could actually support. That revision is discussed in Section~\ref{subsec:secondary-selection}
+as evidence of how the selected approach behaved in practice.
+\subsection{Evaluation Criteria}\label{subsec:evaluation-criteria}
+\begin{longtable}{
+  >{\raggedright\arraybackslash}p{0.08\textwidth}  >{\raggedright\arraybackslash}p{0.44\textwidth}
+  >{\raggedright\arraybackslash}p{0.30\textwidth}}
+\caption{Evaluation criteria and their origin}\label{tab:criteria}\\
+\toprule\textbf{ID} & \textbf{Criterion} & \textbf{Derived from} \\
+\midrule\endfirsthead
+\toprule\textbf{ID} & \textbf{Criterion} & \textbf{Derived from} \\
+\midrule\endhead
+\bottomrule\endlastfoot
+EC-1 & Delivers a single consolidated view that removes the need to consult each tool's own dashboard & O-01 \\
+\addlinespace EC-2 & Can be implemented without modifying the tool's infrastructure & C-07 \\
+\addlinespace EC-3 & Operates entirely within free service tiers & C-03 \\
+\addlinespace EC-4 & Produces scores that can be explained in terms of their contributing metrics &
+O-03, NFR-20 \\\addlinespace
+EC-5 & Extensible to further tools without altering the scoring logic & O-07, NFR-21\\
+\addlinespace EC-6 & Upholds confidentiality of tool data and anonymity of respondents & NDA,
+NFR-07--NFR-09 \\\addlinespace
+EC-7 & Tolerates third-party outages and rate limits without data loss &NFR-10--NFR-16 \\
+\addlinespace EC-8 & Provides data current enough for the decisions the system supports & O-06,
+SH-01 expectations \\\end{longtable}
+\subsection{Candidate Solutions: Data Acquisition and Consolidation}
+\label{subsec:primary-candidates}
+\subsubsection{Solution 1 : Push-Based Integration}
+Each source tool is configured to notify the platform when something happens. The version-control platform sends webhooks on commits, pull requests and reviews.
+The CI service reports build and deployment outcomes. The issue tracker sends events on ticket transitions. The platform receives these events, stores them,
+and derives health scores from the accumulated event history.
+\begin{figure}[htbp]\centering
+\begin{tikzpicture}[  node distance=5mm and 8mm,
+  box/.style={draw, rounded corners=2pt, align=center, minimum height=9mm,              text width=23mm, font=\small},
+  arr/.style={-{Stealth[length=2mm]}, thick},  grp/.style={draw, dashed, rounded corners=3pt, inner sep=3.5mm}
+]\node[box] (vcs) {Version Control};
+\node[box, below=of vcs] (pm) {Project Management};\node[box, below=of pm] (ci) {CI/CD service};\node[box, below=of ci] (cq) {Code Quality};
+\node[box, right=20mm of pm] (recv) {Event receiver};\node[box, right=of recv] (store) {Event store};
+\node[box, right=of store] (score) {Scoring};\node[box, right=of score] (dash) {Dashboard};
+\draw[arr] (vcs.east) -- (recv.west);\draw[arr] (pm.east) -- (recv.west);
+\draw[arr] (ci.east) -- (recv.west);\draw[arr] (cq.east) -- (recv.west);\draw[arr] (recv) -- (store);
+\draw[arr] (store) -- (score);\draw[arr] (score) -- (dash);
+\begin{scope}[on background layer]  \node[grp, fit=(vcs)(pm)(ci)(cq),
+        label=above:{\small Tools (need configuration)}] {};\end{scope}
+\end{tikzpicture}\caption{Solution 1 : push-based integration. Source tools notify the platform as
+events occur, requiring webhook or agent configuration inside the tool's infrastructure.}
+\label{fig:s1-push}\end{figure}
+\subsubsection{Solution 2 : Scheduled Pull Through a Connector Abstraction}
+The platform holds read-only credentials for each tool and queries their public
+APIs on a schedule. Each run produces an immutable, timestamped snapshot of the metrics retrieved, from which scores are computed. A connector abstraction
+isolates the details of each provider, so that the ingestion pipeline treats all tools uniformly.
+\begin{figure}[htbp]
+\centering\begin{tikzpicture}[
+  node distance=6mm and 13mm,  box/.style={draw, rounded corners=2pt, align=center, minimum height=9mm,
+              text width=23mm, font=\small},  arr/.style={-{Stealth[length=2mm]}, thick},
+  grp/.style={draw, dashed, rounded corners=3pt, inner sep=3.5mm}]
+\node[box] (sched) {Scheduler};\node[box, right=of sched] (queue) {Job queue};
+\node[box, right=of queue] (worker) {Connector worker};\node[box, above right=4mm and 16mm of worker] (vcs) {Version Control};
+\node[box, right=16mm of worker] (pm) {Project Management};\node[box, below right=4mm and 16mm of worker] (ci) {CI/CD service};\node[box, below right=16mm and 16mm of worker] (cq) {Code Quality};
+\node[box, below=14mm of queue] (snap) {Snapshot store};\node[box, left=of snap] (score) {Scoring};
+\draw[arr] (sched) -- (queue);\draw[arr] (queue) -- (worker);
+\draw[arr] (worker.east) -- node[above, font=\scriptsize, pos=0.55] {pull}(vcs.west);
+\draw[arr] (worker.east) -- (pm.west);\draw[arr] (worker.east) -- (ci.west);
+\draw[arr] (worker.south) |- (snap.east);\draw[arr] (snap) -- (score);\draw[arr] (worker.east) -- (cq.west);
+\begin{scope}[on background layer]  \node[grp, fit=(vcs)(pm)(ci)(cq),
+        label=above:{\small Tools (unmodified)}] {};\end{scope}
+\end{tikzpicture}\caption{Solution 2 : scheduled pull. The platform reads from each tool's public API on
+a fixed cadence and records an immutable snapshot per run. No configuration is required inside the tool's infrastructure.}
+\label{fig:s2-pull}\end{figure}
+\subsubsection{Solution 3 : Composition of Existing Business Intelligence Tooling}
+No data ingestion layer is built. Data is exported from each tool into an
+existing analytics product such as Grafana or Metabase, and effort is confined to defining dashboards and, where the product permits, a derived scoring
+calculation on top of the imported data.
+\begin{figure}[htbp]\centering
+\begin{tikzpicture}[  node distance=6mm and 14mm,
+  box/.style={draw, rounded corners=2pt, align=center, minimum height=9mm,              text width=23mm, font=\small},
+  arr/.style={-{Stealth[length=2mm]}, thick},  grp/.style={draw, dashed, rounded corners=3pt, inner sep=3.5mm}
+]
+\node[box] (vcs) {Version Control};
+\node[box, below=of vcs] (pm) {Project Management};
+\node[box, below=of pm] (ci) {CI/CD Service};\node[box, below=of ci] (cq) {Code Quality};
+\node[box, right=20mm of pm] (bi) {BI product\\(Grafana / Metabase)};
+\node[box, right=of bi] (panels) {Per-tool panels};
+\node[box, below=10mm of panels] (calc) {Limited derived\\calculation};
+\draw[arr] (vcs.east) -- node[above, font=\scriptsize, pos=0.6] {export} (bi.west);
+\draw[arr] (pm.east) -- (bi.west);
+\draw[arr] (ci.east) -- (bi.west);
+\draw[arr] (bi) -- (panels);
+\draw[arr] (bi) -- (calc);
+\draw[arr] (cq.east) -- (bi.west);
+\begin{scope}[on background layer]
+  \node[grp, fit=(vcs)(pm)(ci)(cq), label=above:{\small Tools}] {};
+\end{scope}
+\end{tikzpicture}
+\caption{Solution 3 : composition of existing BI tooling. Visualisation is inherited
+from a mature product, but the unified scoring model and the survey and action
+subsystems have no natural home.}
+\label{fig:s3-bi}
+\end{figure}
+
+\subsection{Comparative Evaluation}
+\label{subsec:primary-evaluation}
+
+\paragraph{EC-1 : Single consolidated view.} 
+Solution 1 and Solution 2 both satisfy this. Each produces one store of normalised data from
+which a unified view can be rendered. Solution 3 does not. A BI product can place panels
+from several sources on one screen, but it preserves each tool's own metric
+vocabulary; the manager still reads four sets of numbers rather than one
+comparable score. This is precisely the condition SSCL asked to be relieved
+of, so Solution 3 fails the originating requirement even though it appears superficially
+to address it.
+
+\paragraph{EC-2 : No modification of tool infrastructure.}
+Solution 2 satisfies this completely. It requires only a read-scoped access token. Solution 1
+does not. Webhooks must be registered on every repository, CI pipelines must be
+altered to report outcomes, and the issue tracker must be configured to emit
+events, all of which require administrative changes inside systems the team
+has no authority over. Solution 3 partially satisfies it as exports can often be arranged without
+structural change, though scheduled export jobs still require somewhere to run.
+
+\paragraph{EC-3 : Free service tiers.}
+Solution 2 satisfies this. Polling consumes API quota but remains within free limits when
+projects sharing a credential are staggered. Solution 1 is in principle the most
+economical, since events arrive without polling, but it requires an
+always-available public endpoint to receive them, which is difficult to
+guarantee on free hosting that suspends idle instances, and a webhook delivery
+missed during suspension is lost permanently. Solution 3 fails as the BI products capable
+of the required multi-source integration are commercially licensed, and the
+free variants impose limits that the intended usage would exceed.
+
+\paragraph{EC-4 : Explainable scores.}
+Solution 1 and Solution 2 are equivalent here, since explainability is a property of the scoring
+model rather than of how data arrives; both retain the inputs from which a score
+was derived. Solution 3 partially satisfies it. Derived calculations inside a BI product
+are expressible, but the tooling is oriented toward displaying values rather than
+accounting for how a composite figure was assembled, and reconstructing a
+per-metric contribution breakdown across heterogeneous sources would be awkward.
+
+\paragraph{EC-5 : Extensibility.}
+Solution 2 satisfies this. A new provider is a new connector behind an existing
+interface, with no change to scoring. Solution 1 partially satisfies it, since each new
+provider brings its own event schema, delivery semantics and registration
+procedure, and not every tool emits events for the quantities of interest. Solution 3
+partially satisfies it, bounded by which sources the chosen BI product supports.
+
+\paragraph{EC-6 : Confidentiality and anonymity.}
+Solution 2 satisfies this. Data is pulled into infrastructure the team controls, using
+narrowly scoped read-only credentials, and anonymity is enforced in a schema the
+team designed. Solution 1 partially satisfies it. The receiving endpoint is publicly
+reachable by necessity and becomes an additional attack surface carrying tool
+data. Solution 3 does not satisfy it adequately as routing tool data through a
+third-party analytics product introduces a processor whose terms the team does
+not control, which sits poorly with the non-disclosure agreement.
+
+\paragraph{EC-7 : Tolerance of third-party failure.}
+Solution 2 satisfies this. A pull that fails can simply be retried, and the previous
+snapshot remains valid in the meantime; an unavailable tool degrades one
+dimension of one snapshot rather than losing data. Solution 1 does not since a push
+architecture loses events that arrive while the receiver is down unless the
+provider offers replay, and reconstructing the gap afterwards generally requires
+a pull mechanism anyway meaning Solution 1 in practice tends toward implementing Solution 2
+as well. Solution 3 partially satisfies it, depending on the export mechanism.
+
+\paragraph{EC-8 : Data currency.}
+Here the ordering reverses. Solution 1 satisfies this best, delivering events within
+seconds. Solution 2 only partially satisfies it because between scheduled runs the data is
+stale, bounded by the sync interval. Solution 3 partially satisfies it, depending on
+export frequency.
+
+\begin{longtable}{
+  >{\raggedright\arraybackslash}p{0.08\textwidth}
+  >{\raggedright\arraybackslash}p{0.34\textwidth}
+  >{\raggedright\arraybackslash}p{0.14\textwidth}
+  >{\raggedright\arraybackslash}p{0.14\textwidth}
+  >{\raggedright\arraybackslash}p{0.14\textwidth}
+}
+\caption{Summary of the comparative evaluation}
+\label{tab:primary-comparison}\\
+\toprule
+\textbf{ID} & \textbf{Criterion} & \textbf{S1 Push} & \textbf{S2 Pull} & \textbf{S3
+BI} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{ID} & \textbf{Criterion} & \textbf{S1 Push} & \textbf{S2 Pull} & \textbf{S3
+BI} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+EC-1 & Single consolidated view & Satisfied & Satisfied & Not satisfied \\
+EC-2 & No tool infrastructure change & Not satisfied & Satisfied & Partial \\
+EC-3 & Free service tiers & Partial & Satisfied & Not satisfied \\
+EC-4 & Explainable scores & Satisfied & Satisfied & Partial \\
+EC-5 & Extensibility & Partial & Satisfied & Partial \\
+EC-6 & Confidentiality and anonymity & Partial & Satisfied & Not satisfied \\
+EC-7 & Tolerance of third-party failure & Not satisfied & Satisfied & Partial \\
+EC-8 & Data currency & Satisfied & Partial & Partial \\
+\end{longtable}
+
+\subsection{Selection and Justification}
+\label{subsec:primary-selection}
+
+Solution 2 is selected.
+
+Solution 3 is eliminated first, and on the strongest possible ground that it fails EC-1. It
+would leave SSCL reading each tool's metrics in that tool's own terms,
+which is the problem the project exists to solve. Its advantages in
+implementation effort are therefore irrelevant, and its licensing cost (EC-3)
+and third-party processing of tool data (EC-6) would disqualify it regardless.
+
+Solution 1 is eliminated on feasibility rather than on merit. As an architecture it is
+sound, and it is the only option that fully satisfies EC-8. But it requires
+administrative changes inside the tool's systems (EC-2) that the project has
+no standing to make, an always-available public endpoint that free hosting cannot
+guarantee (EC-3). Its weakness on EC-7 compounds these: because missed events
+cannot be recovered without a pull mechanism, a production-grade Solutoin 1 would
+generally have to implement Solution 2 as well, making it a superset of the selected
+solution rather than an alternative to it.
+
+Solution 2's weakness is real and should be stated plainly. It is the weakest of the
+three on data currency (EC-8). Between scheduled runs the dashboard shows the
+state as of the last synchronisation, not the present moment. This was judged
+acceptable, for two reasons. First, it is consistent with how the product is
+positioned: as established in Section~\ref{subsec:problem-context}, the system is
+a trend indicator intended to reveal trends over weeks and months, and the
+decisions it supports, such as whether a project is drifting, whether a team is under
+strain, do not require minute-by-minute currency. Second, the limitation is
+mitigated rather than merely tolerated because an on-demand synchronisation is available
+whenever a current reading is needed, so the scheduled cadence sets a floor on
+freshness rather than a ceiling.
+
+Weighed as a whole, Solution 2 satisfies every criterion that the project's constraints
+make non-negotiable, and is weakest only on the one criterion the product's
+positioning renders least critical.
+
+\subsection{Candidate Approaches: Health Score Computation}
+\label{subsec:secondary-candidates}
+
+The second decision concerns how the collected metrics become the seven health
+scores. Three approaches were considered.
+
+\textbf{Approach 1 : Rule-based weighted model.} Each metric is normalised to a common
+0--100 scale by an explicit formula, assigned a weight reflecting its assessed
+importance, and combined into a weighted average per dimension.
+
+\textbf{Approach 2 : Supervised machine learning.} A model is trained on historical
+project data labelled with known outcomes such as projects that failed, slipped, or
+succeeded, and learns to predict health from the metric vector.
+
+\textbf{Approach 3 : Language-model judgement.} The raw metrics are presented to a large
+language model, which returns an assessed score per dimension with a narrative
+rationale.
+
+\subsection{Comparative Evaluation and Selection}
+\label{subsec:secondary-selection}
+
+Approach 2 is eliminated on data availability. Supervised learning requires labelled
+training data, and none exists. There is no corpus of projects annotated with
+health outcomes, the industry partner has no such historical record, and C-06 establishes
+that the system cannot backfill history from the source tools. A model could only
+begin learning after the platform had itself accumulated years of observations,
+and even then the labels, what counts as a project having gone badly, would
+have to be supplied by the very managers the system is meant to inform. The
+approach is circular at the outset and cold-started indefinitely.
+
+Approach 3 is eliminated on explainability and determinism. It fails EC-5 directly because a
+language model can produce a plausible narrative for a score, but that narrative
+is a post-hoc rationalisation rather than an account of a computation, and it
+cannot be audited against the underlying arithmetic because there is none. Two
+identical inputs may yield different scores, making trend lines, the system's
+central output, unreliable. It also conflicts with EC-3, since every score for
+every project on every scheduled run would incur an inference cost, and with
+EC-6, since it would require transmitting the full metric set for the partner's
+projects to a third-party service on every run.
+
+Approach 1 is selected. It satisfies EC-5 completely because a score is a weighted sum of
+normalised inputs, so the contribution of each metric is recoverable by
+construction, which is what makes the per-metric breakdown of FR-26 possible at
+all. It is deterministic, so identical inputs always yield identical scores and
+trend lines mean what they appear to mean. It requires no training data and so
+produces meaningful output from a project's very first synchronisation. It incurs
+no marginal cost per evaluation, satisfying EC-3. And because the weighting rules
+are declared explicitly rather than learned, they can be documented and unit
+tested, satisfying NFR-22.
+
+The principal weakness of T1 is its weights and
+thresholds are assigned by judgement rather than derived from evidence, and are
+documented in this project as provisional values requiring calibration against
+real project data. This is a genuine limitation, but it is a limitation of
+calibration rather than of approach. The weights can be revised as
+evidence accumulates without altering the structure of the model, whereas the
+deficiencies identified in Approach 2 and Approahc 3 are intrinsic.
+
+The selected approach was itself refined during development. An initial
+six-category scoring model was replaced, following the team's own research, by
+the seven-category model described in this report, after analysis of the
+available metrics showed that the original categories conflated concerns the
+collected data could distinguish and, in places, claimed distinctions the
+data could not support. That the model could be restructured in this way, with
+the change confined to the declared rules while the surrounding pipeline was
+unaffected, is itself evidence for the maintainability argument advanced above.
+
+\subsection{Conclusion}
+\label{subsec:formulation-conclusion}
+
+The system is therefore built as a scheduled-pull platform (Solution 2) with a rule-based
+weighted scoring model (Approach 1). Together these satisfy every criterion that the
+project's constraints render non-negotiable, and are weakest only in areas such as
+data currency, and the calibration of scoring weights which are either
+mitigated by design or improvable without structural change. The detailed design
+of the selected solution is presented in Chapter~\ref{ch:design}.

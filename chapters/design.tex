@@ -2,18 +2,361 @@
 \chapter{System Design and Implementation}
 \label{ch:design}
 
+% \section{Functional Design and Sub-problem Partitioning}
+% \label{sec:architecture}
+% \begin{figure}[htbp]
+%   \centering
+%   \figplaceholder{Architecture diagram}
+%   \caption{System architecture}
+%   \label{fig:architecture}
+% \end{figure}
+% \guidance{Partition the problem into sub-problems or modules; explain each one's
+% responsibility and how they interact. Show where the standards and codes of
+% practice from \Cref{sec:standards} and any health, safety, or environmental
+% considerations shaped the design.}
+
 \section{Functional Design and Sub-problem Partitioning}
 \label{sec:architecture}
+
+The system was decomposed along two independent axes. The first is a separation
+by execution context where work that must answer a user within the lifetime of
+an HTTP request is handled by one process, while work that is long-running,
+retryable or scheduled is handled by another. The second is a separation by
+domain concern where the logic for talking to an external tool, for computing a
+score, for queueing a job and for encrypting a credential are each isolated
+behind an interface, so that none of them depends on the details of the others.
+
+\Cref{fig:architecture} shows the resulting structure.
+
 \begin{figure}[htbp]
-  \centering
-  \figplaceholder{Architecture diagram}
-  \caption{System architecture}
-  \label{fig:architecture}
+\centering
+\begin{tikzpicture}[
+  font=\small,
+  proc/.style={draw, thick, rounded corners=3pt, align=left, inner sep=2.2mm,
+               text width=36mm},
+  infra/.style={draw, rounded corners=2pt, align=center, inner sep=2mm},
+  chip/.style={draw, rounded corners=1pt, align=center, text width=21mm,
+               inner sep=1.3mm, font=\scriptsize},
+  ext/.style={draw, dashed, rounded corners=2pt, align=center, inner sep=2mm},
+  band/.style={draw, dashed, rounded corners=3pt, inner sep=2.4mm},
+  arr/.style={-{Stealth[length=2mm]}, thick},
+  tag/.style={font=\scriptsize, fill=white, inner sep=1pt}
+]
+
+%% ---- processes ----
+\node[proc] (api) at (0,0) {\textbf{API process}\\[2pt]
+  {\scriptsize HTTP routing and validation}\\
+  {\scriptsize Authentication and sessions}\\
+  {\scriptsize Tenancy and authorisation}\\
+  {\scriptsize Project, survey, action services}\\
+  {\scriptsize Progress streaming (SSE)}};
+
+\node[infra, text width=19mm, right=15mm of api] (redis) {\textbf{Redis}\\[1pt]
+  {\scriptsize Job queues}\\
+  {\scriptsize Pub/sub}\\
+  {\scriptsize Sessions}};
+
+\node[proc, right=15mm of redis] (worker) {\textbf{Worker process}\\[2pt]
+  {\scriptsize Sync processor}\\
+  {\scriptsize Scheduled sync fan-out}\\
+  {\scriptsize Survey distribution and send}\\
+  {\scriptsize Survey insight analysis}\\
+  {\scriptsize Action embedding}};
+
+%% ---- client ----
+\node[infra, text width=36mm, above=12mm of api] (client) {\textbf{Web client}\\[1pt]
+  {\scriptsize React single-page application}};
+
+%% ---- shared domain libraries ----
+\node[chip, below=15mm of api.south west, anchor=north west] (p1)
+  {Persistence\\layer};
+\node[chip, right=2.5mm of p1] (p2) {Security\\(crypto)};
+\node[chip, right=2.5mm of p2] (p3) {Risk\\engine};
+\node[chip, right=2.5mm of p3] (p4) {Connector\\interface};
+\node[chip, right=2.5mm of p4] (p5) {AI, embeddings,\\notifications};
+
+\begin{scope}[on background layer]
+  \node[band, fit=(p1)(p5),
+        label={[font=\scriptsize]above left:Shared domain libraries}] (libs) {};
+\end{scope}
+
+%% ---- infrastructure and external systems ----
+\node[infra, text width=42mm] (db)
+  at ($(p1.south)!0.2!(p2.south) + (0,-20mm)$)
+  {\textbf{PostgreSQL (Supabase)}\\[1pt]
+   {\scriptsize snapshots, scores, surveys, actions}};
+
+\node[ext, text width=40mm] (extsys)
+  at ($(p4.south)!-0.5!(p5.south) + (0,-20mm)$)
+  {\textbf{External systems}\\[1pt]
+   {\scriptsize Tools: VCS, Project management, CI/CD, Code quality}};
+
+\node[ext, text width=40mm] (fxtsys)
+  at ($(p4.south)!1.5!(p5.south) + (0,-20mm)$)
+  {\textbf{External systems}\\[1pt]
+   {\scriptsize AI, Email}};
+
+%% ---- flows ----
+\draw[arr] (client) -- node[tag, right] {REST} (api);
+\draw[arr] (api.west) to[out=170, in=190, looseness=2]
+  node[tag, left] {SSE} (client.west);
+
+\draw[arr] (api) -- node[tag, above] {enqueue} (redis);
+\draw[arr] (redis) -- node[tag, above] {dequeue} (worker);
+\draw[arr] (worker.south west) to[out=215, in=325]
+  node[tag, below] {progress} (redis.south east);
+
+\draw[arr] (api.south) -- (api.south |- libs.north);
+\draw[arr] (worker.south) -- (worker.south |- libs.north);
+
+\draw[arr] (p1.south) -- (db.north);
+\draw[arr] (p4.south) -- (extsys.north);
+\draw[arr] (p5.south) -- (fxtsys.north);
+\end{tikzpicture}
+\caption{System architecture. The API process serves the client synchronously and
+the worker performs all long-running and scheduled work; Redis carries both the
+job queues between them and the progress events flowing back. Both processes draw
+on the same domain libraries, which are the only components that contact the
+database or external systems.}
+\label{fig:architecture}
 \end{figure}
-\guidance{Partition the problem into sub-problems or modules; explain each one's
-responsibility and how they interact. Show where the standards and codes of
-practice from \Cref{sec:standards} and any health, safety, or environmental
-considerations shaped the design.}
+
+
+\subsection{Rationale for the Partition}
+\label{subsec:partition-rationale}
+
+Splitting the API and worker into separate processes follows from the nature of
+the work. A single synchronisation queries four external APIs, some with
+pagination over hundreds of records, and can run for minutes. Performing that
+inside a request would hold the connection open far beyond any reasonable
+timeout, and a failure part-way through would leave the user with an error and no
+record of the partial work. Moving it to a worker allows the request to return
+immediately with an acknowledgement, and allows the work itself to be retried,
+prioritised and rate-limited independently of any user waiting on it (NFR-11,
+NFR-16).
+
+That separation creates a problem of its own: the worker performs the work, but
+only the API process holds a connection to the user's browser, so the worker
+cannot report progress directly. Redis resolves this by carrying both directions
+of the exchange. It holds the job queues through which the API hands work to the
+worker, and it carries a publish/subscribe channel per synchronisation session
+through which the worker reports progress back. The API subscribes to that
+channel and relays each event to the browser over Server-Sent Events. The final
+completion event is additionally retained in Redis for a limited period, so that a
+client which reloads the page after a synchronisation has finished still receives
+its outcome rather than waiting on a channel that will never speak again
+(FR-17).
+
+\subsection{Module Responsibilities}
+\label{subsec:module-responsibilities}
+
+\begin{longtable}{
+  >{\raggedright\arraybackslash}p{0.24\textwidth}
+  >{\raggedright\arraybackslash}p{0.34\textwidth}
+  >{\raggedright\arraybackslash}p{0.28\textwidth}
+}
+\caption{Modules, their responsibilities and principal interactions}
+\label{tab:modules}\\
+\toprule
+\textbf{Module} & \textbf{Responsibility} & \textbf{Interacts with} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Module} & \textbf{Responsibility} & \textbf{Interacts with} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+Web client & Presents the portfolio, dashboards, settings and survey interfaces;
+consumes the progress stream & API process \\
+\addlinespace
+HTTP interface layer & Routes requests, validates input, maps domain errors to status
+codes & All API-side services \\
+\addlinespace
+Authentication and session management & Verifies credentials, issues and revokes
+sessions, manages verification, invitation and reset tokens & Redis session store,
+user data access \\
+\addlinespace
+Authorisation and tenancy & Restricts every access to the caller's company, and
+further to assigned projects for non-administrators & All API-side services \\
+\addlinespace
+Project and workspace services & Repository import, tool integration configuration,
+member management & Data access, connector repository listing \\
+\addlinespace
+Progress streaming & Subscribes to a session's event channel and relays events to the
+browser & Redis pub/sub \\
+\addlinespace
+Queue abstraction & Declares the job queues, their retry, priority and retention
+policies, and the scheduler & API process, worker process, Redis \\
+\addlinespace
+Sync processor & Orchestrates one synchronisation: fetch, persist, score, report &
+Connectors, persistence, risk engine, event store \\
+\addlinespace
+Scheduled sync fan-out & Expands a scheduler tick into one queued job per project,
+staggered by shared credential & Queue abstraction, project data access \\
+\addlinespace
+Survey processors & Assign monthly pulses, generate questions, dispatch links,
+analyse responses on close & AI client, notification clients, survey data access \\
+\addlinespace
+Connector interface & Presents one interface per tool category; each provider
+implementation converts a vendor API into a normalised metric object & Worker
+process, external tool APIs \\
+\addlinespace
+Risk engine & Converts a normalised metric set into the seven health scores, with
+weights and null handling & Sync processor, survey health context \\
+\addlinespace
+AI client abstraction & Question generation, question scoring and response analysis
+behind a provider-independent interface & Survey processors \\
+\addlinespace
+Embedding and search & Produces and stores action vectors; performs semantic
+retrieval and reranking & Action services, worker process \\
+\addlinespace
+Security module & Credential encryption at rest and survey link sealing & Data access
+layer, survey dispatch \\
+\addlinespace
+Notification clients & Delivers survey links to team channels and transactional email
+& Survey processors \\
+\addlinespace
+Persistence layer & All database access, with encryption and decryption applied at
+this boundary & Every module above \\
+\end{longtable}
+
+Three of these boundaries carry most of the design's extensibility, and are worth
+stating explicitly.
+
+The \textbf{connector interface} is what satisfies O-07 and NFR-21. Each
+provider implements a single method returning a normalised metric object, and a
+registry maps a tool name to its implementation. Nothing downstream of that
+interface, not the sync processor, not the persistence layer, not the risk
+engine, contains any provider-specific logic. Adding a new version-control
+provider is therefore the addition of one class and one registry entry.
+
+The \textbf{risk engine} isolates scoring behind a similar boundary. Each of the
+seven dimensions is an independent strategy selected by an enumeration, and every
+strategy is built from the same shared set of normalisation functions and a
+common null-aware weighting routine. A dimension's rules can be changed, or a
+dimension added, without touching ingestion or presentation which is a property that
+was exercised in practice when the scoring model was revised, as described in
+\Cref{sec:detailed-design}.
+
+The \textbf{persistence layer} is the single point at which credential encryption
+is applied. Encryption occurs on write and decryption on read, both inside the
+data-access functions, so that every module above this boundary operates on
+plaintext and none of them can accidentally persist an unencrypted credential.
+
+\subsection{Interaction: The Synchronisation Path}
+\label{subsec:interaction-sync}
+
+The synchronisation flow exercises most of the system and illustrates how the
+modules cooperate. A request arrives at the HTTP layer, which validates it and
+confirms through the authorisation module that the caller may act on the named
+project. The project service resolves the configured integrations, decrypting
+each credential at the persistence boundary and resolving the version-control
+token from the owning workspace where the project does not carry its own. The
+queue abstraction enqueues a job carrying the project, the tool list and the
+session identifier, and the request returns an acknowledgement.
+
+The worker dequeues the job and creates one snapshot record for the run. It then
+fetches from the configured tools concurrently, subject to a concurrency bound
+(NFR-15), publishing a progress event as each tool begins and finishes. Each
+tool's normalised output is written against the shared snapshot. A tool that
+fails is recorded as failed and the run continues (FR-19, NFR-10). Once
+persistence is complete, the risk engine computes the seven scores from whatever
+metrics the snapshot actually contains, redistributing the weight of absent
+inputs (FR-22), and the scores are stored against the snapshot. A completion
+event is published and retained. Throughout, the API process has been relaying
+each published event to the browser, which updates per-tool status in place.
+
+\subsection{Influence of Standards and Codes of Practice}
+\label{subsec:standards-in-design}
+
+The obligations established in \Cref{sec:standards} were not applied as a review
+performed after construction; several of them determined where module boundaries
+were drawn in the first place. \Cref{tab:standards-design} records where each
+one is realised in the structure.
+
+\begin{longtable}{
+  >{\raggedright\arraybackslash}p{0.26\textwidth}
+  >{\raggedright\arraybackslash}p{0.60\textwidth}
+}
+\caption{Where the standards of \Cref{sec:standards} shaped the design}
+\label{tab:standards-design}\\
+\toprule
+\textbf{Obligation} & \textbf{Effect on the design} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Obligation} & \textbf{Effect on the design} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+Access control (OWASP A01) & Tenancy scoping is applied inside the persistence layer
+rather than in individual handlers, so that a query cannot omit it by oversight. Role
+and project-membership checks sit in the service layer, above it \\
+\addlinespace
+Cryptographic protection (OWASP A02) & All cryptography is confined to a single
+security module, and applied at the persistence boundary. No other module performs
+encryption, which keeps the algorithm, key handling and versioning in one auditable
+place \\
+\addlinespace
+Injection resistance (OWASP A03) & A single parameterised data-access client is the
+only route to the database; no module composes SQL. One shared helper sanitises
+user-supplied search terms, and one escapes values placed into outgoing email \\
+\addlinespace
+Abuse resistance (OWASP A04) & Rate limiting is applied as middleware at the router
+handling unauthenticated requests. Dispatch quotas and recipient cooldowns are
+enforced inside the survey dispatch module, not at the call sites that invoke it \\
+\addlinespace
+Respondent anonymity (NFR-07) & Enforced structurally rather than procedurally: the
+survey response table carries no foreign key to a user, so no query can reconstruct
+the association. The design places the guarantee in the schema, where application
+code cannot circumvent it \\
+\addlinespace
+Data minimisation & The AI client abstraction is the only module permitted to
+transmit data externally for analysis, and the prompt-construction layer strips
+personal names and work-item identifiers before transmission, giving a single
+chokepoint to audit \\
+\addlinespace
+Temporal correctness (ISO 8601, RFC 3339) & Timestamp parsing and formatting are
+centralised in a shared utility, and the database columns were migrated to zone-aware
+types so that instants are unambiguous regardless of the reader's locale \\
+\addlinespace
+Accessibility (WCAG 2.1 AA) & Interactive elements in the client are built from
+shared components that carry role, focus and keyboard behaviour by default, so that
+accessibility properties are inherited rather than reapplied per screen \\
+\end{longtable}
+
+\subsection{Health, Safety and Environmental Considerations}
+\label{subsec:hse-design}
+
+The system performs no physical actuation and controls no equipment, so the
+safety considerations that govern cyber-physical systems do not arise. Two
+related considerations do apply, and both influenced the design.
+
+The first concerns \textbf{occupational wellbeing}. The system measures the work
+of identifiable people, and a monitoring tool of this kind can readily become an
+instrument of individual performance assessment with predictable effects on
+the behaviour of those measured. Three design decisions deliberately foreclose
+that use. Metrics are aggregated to the project level and no per-developer view
+exists anywhere in the interface, despite the underlying data making one
+technically feasible. Qualitative feedback is anonymous by schema construction,
+as described above, so that candour carries no personal risk. And survey dispatch
+is bounded by per-project quotas and per-recipient cooldowns, so that
+participation does not itself become a burden. These constraints resolve the
+conflict between managerial visibility and developer psychological safety
+identified in \Cref{subsec:conflicts}, and they are properties of the design rather
+than matters of policy.
+
+The second concerns \textbf{resource consumption}. Two choices reduce it
+materially. Collection is scheduled rather than continuous, so the system issues
+a bounded number of external requests per project per day instead of polling,
+and projects sharing a credential are staggered, which flattens the load profile
+rather than concentrating it. Both were adopted primarily to respect third-party
+rate limits and free-tier quotas, but their effect on energy and network
+consumption is the same. The resources the deployment consumes are quantified in
+\Cref{sec:deployment}, and their environmental impact assessed in
+\Cref{sec:sustainability}.
 
 \section{Design Refinement and Simulation}
 \label{sec:detailed-design}

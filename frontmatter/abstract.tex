@@ -1,10 +1,42 @@
 \chapter*{ABSTRACT}
 \addcontentsline{toc}{chapter}{Abstract}
 
-\guidance{In no more than one page, state the problem, what was designed and
-built, how it was verified or validated, and the key outcomes. For a
-research-oriented project, briefly include the method and principal findings.}
+Software organisations run each project through separate tools for version
+control, issue tracking, static code analysis and CI/CD, and each tool reports
+its own metrics on its own scale. Judging whether a project is healthy therefore
+means reconciling four or five dashboards by hand. At Spectrum Software \&
+Consulting Pvt.\ Ltd.\ (SSCL), the industry partner that raised the problem,
+this is done rarely. Projects cannot be compared like for like, and a slowly
+deteriorating project is noticed only once deadlines slip. The tools also
+capture nothing about how the team is faring, or about what management did in
+response and whether it helped.
+
+This project designed and built \emph{Pulse}, a multi-tenant engineering-health
+platform. Scheduled and on-demand synchronisation pulls metrics through a
+connector abstraction into immutable snapshots. A deterministic rule-based model
+converts them into seven health scores and an overall score on a common 0--100
+scale. An absent metric is excluded and the remaining weights are renormalised,
+and every score decomposes into the signals, weights and contributions that
+produced it. AI-generated surveys, delivered by email, collect team feedback
+without storing any respondent identity. An action log records management
+interventions and prompts a later review of their effectiveness. The system is
+built with TypeScript, PostgreSQL, Redis and React. It is deployed on free-tier
+services at no monetary cost.
+
+Verification combined 142 automated tests enforced as a required CI check,
+inspection, end-to-end demonstration on the team's own repositories, and four
+targeted investigations. The system was also reviewed with SSCL's Chief
+Technical Officer in five meetings. Of 41 functional requirements, 38 are met;
+of 26 non-functional requirements, 21 are met. The investigations showed that
+renormalisation stops a project being penalised for an unconnected tool (a
+score of 80 rather than 12 in a worked example). They also found that no stored
+record links a survey response to its author. Six connectors across the four
+tool categories were delivered, two more than planned. The main limitations are
+that AI-assisted action search does not fall back automatically when its
+provider is unavailable, and that the rate-limit capacity per shared credential
+is unquantified. Overall test coverage is also low, with no frontend tests.
 
 \vspace{12pt}
-\noindent\textbf{Keywords:} \guidance{three to six keywords}
+\noindent\textbf{Keywords:} software project health; engineering metrics;
+explainable scoring; anonymous surveys; tool integration
 \clearpage

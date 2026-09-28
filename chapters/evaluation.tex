@@ -1,30 +1,1085 @@
-% Chapter 5 -- Rubric: PO4 (4.1)
+% Chapter 5 -- Rubric: PO4 (investigation, experiment, synthesis of conclusions),
+% PO3 (3.4 evaluation against requirements), PO5 (application of modern tools)
 \chapter{Investigation and Evaluation}
 \label{ch:evaluation}
 
+This chapter reports the investigative work carried out on the built system.
+\Cref{sec:investigation} presents four investigations using analytical
+derivation, structured adversarial inspection, automated test execution and
+measured configuration evidence as appropriate to the question.
+\Cref{sec:performance} evaluates the delivered system against every objective
+and every functional and non-functional requirement of \Cref{ch:requirements}.
+\Cref{sec:deviations} analyses each point at which the delivered system departs
+from its specification and states the revision made or the reason none was made.
+
+Pulse is a development-focused project rather than a research contribution, so
+the investigations are validations of the design decisions that carried the most
+risk rather than controlled experiments testing scientific hypotheses. Each
+investigation states the form of evidence it can support; source inspection is
+not presented as runtime measurement, and an unmeasured quantity is left
+unresolved. One investigation (INV-2) tests the anonymity guarantee
+adversarially, from the position of the most privileged insider.
+
+Requirement identifiers (O-, FR-, NFR-, C-, G-, SH-, EC-) are those established
+in \Cref{ch:problem,ch:research,ch:requirements}, so every claim here is
+traceable back to a stated requirement. Repository-derived evidence was obtained
+by executing the project's own tooling and inspecting the implementation paths
+discussed below. The commands are listed in \Cref{subsec:reproduction} so the
+figures can be reproduced. Where a quantity was not measured, the text says so
+rather than estimating it.
+
 \section{Experimental Investigation}
 \label{sec:investigation}
-\guidance{Present the investigation carried out to substantiate the
-solution. State the research questions or hypotheses, the method and
-experimental design, the datasets or measurements used and how they were
-obtained, the baselines or points of comparison, and the metrics. Analyse
-and interpret the data, and synthesise the findings into conclusions that
-are supported by the evidence. Projects with a substantial research and
-development component should treat this as the core of the chapter; for
-development-focused projects, report the investigation that validated the
-main design decisions. This is the experimental work on the built system;
-the background research is in \Cref{ch:research}.}
+
+\subsection{Selection of Investigations}
+\label{subsec:investigation-selection}
+
+Four decisions were judged to warrant investigation. A decision qualified if it
+met at least two of three tests: its failure would invalidate a stated project
+objective; its correctness is not observable from the user interface; and no
+established practice prescribed the answer, so the team had to derive one.
+
+\begin{longtable}{
+  >{\raggedright\arraybackslash}p{0.07\textwidth}
+  >{\raggedright\arraybackslash}p{0.33\textwidth}
+  >{\raggedright\arraybackslash}p{0.17\textwidth}
+  >{\raggedright\arraybackslash}p{0.30\textwidth}
+}
+\caption{Investigations and the design decisions they validate}
+\label{tab:investigations}\\
+\toprule
+\textbf{ID} & \textbf{Decision under investigation} & \textbf{Objective / requirement at risk} & \textbf{Consequence if the decision is wrong} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{ID} & \textbf{Decision under investigation} & \textbf{Objective / requirement at risk} & \textbf{Consequence if the decision is wrong} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+INV-1 & Treating an absent metric by excluding it and renormalising the remaining
+weights, rather than imputing a value for it & O-02, O-03, FR-22 & Projects with
+partial tool coverage are scored unfairly, making the cross-project comparison
+that is the product's central claim invalid \\
+\addlinespace
+INV-2 & Enforcing respondent anonymity in the database schema rather than in
+application logic & O-04, NFR-07, NFR-08 & Respondents can be re-identified,
+candour collapses, and the stakeholder conflict recorded in
+\Cref{ch:requirements} (leadership insight vs.\ developer privacy) is
+unresolved \\
+\addlinespace
+INV-3 & Using AI-assisted reranking to recover semantically related actions that
+lexical matching can miss, while retaining lexical search as an independent
+retrieval path & O-05, FR-39, NFR-13 & Without reranking, relevant actions
+expressed with different vocabulary may be missed; when the provider is
+unavailable, ordinary lexical retrieval remains available but explicit deep
+search does not \\
+\addlinespace
+INV-4 & Bounded connector concurrency plus time-staggered scheduling to stay
+inside free-tier API quotas & O-06, NFR-15, NFR-16 & A scheduled portfolio run
+exhausts a shared credential's quota and the trend history that gives the product
+its value develops gaps \\
+\end{longtable}
+
+\subsection{INV-1: Treatment of Absent Metrics in the Scoring Model}
+\label{subsec:inv1}
+
+\paragraph{The decision under investigation.} \Cref{ch:requirements} records
+that most real projects have only a subset of the four tool categories
+configured, and FR-22 requires that a score be computed from whichever metrics
+are actually available. The scoring model must therefore define what a dimension
+score \emph{means} when some of its input signals do not exist. Three treatments
+were considered:
+
+\begin{itemize}
+  \item \textbf{Zero-imputation.} An absent signal scores 0 and retains its full
+  weight.
+  \item \textbf{Mean-imputation.} An absent signal takes the mean of the signals
+  that are present, or of the portfolio.
+  \item \textbf{Renormalisation.} An absent signal is excluded and the weights of
+  the remaining signals are rescaled to sum to one. This is the treatment
+  implemented by the shared scoring utility used across all risk dimensions.
+\end{itemize}
+
+The question is whether the choice is material, and if so which treatment is
+defensible.
+
+\paragraph{Why zero-imputation was rejected.} The objection is arithmetic rather
+than empirical, and it can be shown with a single worked example using the
+implemented weight vector of the security dimension
+(\Cref{tab:security-weights}).
+
+\begin{table}[H]
+\centering
+\caption{Implemented weight vector of the security dimension}
+\label{tab:security-weights}
+\begin{tabular}{llr}
+\toprule
+\textbf{Signal} & \textbf{Source tool} & \textbf{Weight} \\
+\midrule
+\texttt{securityRating} & SonarQube & 0.25 \\
+\texttt{vulnCountDensity} & SonarQube & 0.20 \\
+\texttt{securityReviewRating} & SonarQube & 0.15 \\
+\texttt{securityHotspotsDensity} & SonarQube & 0.15 \\
+\texttt{dependencyUpdateLag} & version control & 0.15 \\
+\texttt{securityRemediationEffort} & SonarQube & 0.10 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Consider a project that has connected version control but not SonarQube --- an
+ordinary situation, and exactly the case FR-22 exists to handle. Five of the six
+signals are absent, carrying 0.85 of the total weight. Suppose the one available
+signal, \texttt{dependencyUpdateLag}, scores 80.
+
+\begin{itemize}
+  \item Under \textbf{renormalisation}, the single present signal's weight is
+  rescaled from 0.15 to 1.0, and the dimension scores \textbf{80}. The score
+  says: \emph{on the evidence available, this project's security posture looks
+  good.}
+  \item Under \textbf{zero-imputation}, the absent signals contribute
+  $0.85 \times 0 = 0$ and the score is $0.15 \times 80 = 12$. The dimension
+  scores \textbf{12}.
+\end{itemize}
+
+The same project, with identical underlying security practices, scores 80 or 12
+depending only on whether an administrator has pasted in a SonarQube token.
+Zero-imputation makes an absent measurement arithmetically indistinguishable
+from a measurement of the worst possible value, so a project that has simply not
+connected a tool is scored as though its code quality were \emph{known} to be
+the worst observable.
+
+This is disqualifying on two grounds. It violates FR-22 directly. More
+seriously, it would defeat objective O-02: across a portfolio, the dominant
+signal in the scores would be how many tools each project had configured, so the
+cross-project comparison that the product exists to provide would be measuring
+the wrong thing entirely. The distortion is also systematically
+one-directional --- every absent signal drags the score down, never up --- so it
+would not average out across a portfolio.
+
+\paragraph{Why mean-imputation was rejected.} Mean-imputation avoids that bias
+and, on accuracy alone, is a reasonable alternative to renormalisation. It was
+rejected on a different ground.
+
+Imputing the \emph{portfolio} mean makes one project's score depend on the
+current state of every other project: a project's displayed score would change
+when an unrelated project synchronised, without anything about the first project
+having changed. That breaks O-03 and FR-26 outright, because a score breakdown
+could no longer be stated in terms of that project's own metrics --- the honest
+breakdown would have to read ``and 0.85 of this score is an assumption borrowed
+from other projects.''
+
+Imputing the project's \emph{own} mean avoids that coupling, but substitutes a
+different problem: it fabricates evidence. It asserts that the project's
+unmeasured security posture resembles its measured dependency hygiene, which is
+an assumption the system has no basis for and cannot show the user.
+
+Renormalisation makes the weaker and more honest claim --- \emph{this is the
+score on the evidence available} --- and keeps every score a pure function of
+that project's own inputs, which is what makes the per-signal breakdown of FR-26
+possible at all.
+
+\paragraph{Verification.} The implemented behaviour is asserted by the scoring
+unit-test suite, which runs in CI on every change:
+
+\begin{itemize}
+  \item \texttt{renormalizedWeightedScore} \emph{``excludes missing signals and
+  renormalizes the remaining weights to sum to 1''} (line 68) --- the direct
+  assertion of FR-22.
+  \item \emph{``computes a plain weighted average when every signal is
+  present''} (line 56) --- confirms renormalisation is a no-op when nothing is
+  missing, so the treatment does not perturb fully-configured projects.
+  \item \emph{``returns null when no signal is present''} (line 48) --- a
+  dimension with no evidence at all yields no score rather than a misleading
+  zero, which is the same principle applied at the boundary.
+  \item \emph{``excludes a present signal whose weight is 0''} and \emph{``clamps
+  the result even if an individual signal score is out of 0..100''} (lines 80,
+  89).
+\end{itemize}
+
+Each of the eight risk strategies additionally has a dedicated automated test
+suite covering its signal set, satisfying NFR-22.
+
+\paragraph{Limitation.} Renormalisation removes the bias, but it cannot
+manufacture the information the absent signal would have carried. A dimension
+score computed from two signals is a weaker estimate than one computed from six,
+and the interface presents both identically --- a manager comparing two projects
+cannot see that one score rests on materially less evidence. Team health is most
+exposed, having only four signals, so a single absent input removes a quarter of
+the evidence. This is recorded as an acknowledged limitation in
+\Cref{subsec:deviation-confidence} and carried to future work.
+
+\subsection{INV-2: Adversarial Investigation of Respondent Anonymity}
+\label{subsec:inv2}
+
+\paragraph{Research question.} NFR-07 requires that a survey response not be
+attributable to the individual who submitted it. The absence of an identity
+column establishes that no \emph{direct} attribution exists; it does not
+establish that no attribution is \emph{possible}. The question is what an
+adversary with realistic access could actually infer.
+
+\paragraph{Threat model.} The adversary is the \textbf{company administrator}:
+an insider with full read access to the tenant's data, including direct database
+access, who wishes to learn how a named developer answered. This is the correct
+adversary to model, because it is precisely the party whose access developers
+(SH-03) are being asked to trust, and it is the strongest adversary the system
+can meaningfully defend against. Defending against a database-level insider is
+what distinguishes a structural guarantee from a policy promise.
+
+\paragraph{Method.} Each plausible linkage route was enumerated and traced
+through the applied response and recipient schemas, token representation,
+dispatch path and insight-generation path. A route was classed as
+\textbf{closed} only where the inspected representation contained no join key or
+identity-bearing value; otherwise it was classed as \textbf{open} or
+\textbf{statistically possible}. The result therefore establishes properties of
+the evaluated implementation, not the probability of successful
+re-identification in a real organisation.
+
+\paragraph{Results.} \Cref{tab:anonymity} records each route attempted and its
+outcome.
+
+\begin{longtable}{
+  >{\raggedright\arraybackslash}p{0.05\textwidth}
+  >{\raggedright\arraybackslash}p{0.30\textwidth}
+  >{\raggedright\arraybackslash}p{0.53\textwidth}
+}
+\caption{Re-identification routes attempted and outcomes}
+\label{tab:anonymity}\\
+\toprule
+\textbf{\#} & \textbf{Linkage route} & \textbf{Outcome} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{\#} & \textbf{Linkage route} & \textbf{Outcome} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+A1 & \textbf{Direct.} A respondent column, foreign key or nullable author field
+on \texttt{survey\_response} & \textbf{Closed by schema.} The table holds
+\texttt{id}, \texttt{survey\_id}, \texttt{submission\_key} (a client-generated
+UUID), \texttt{submitted\_at} and \texttt{answers} (jsonb). There is no identity
+column and no foreign key to \texttt{User} \\
+\addlinespace
+A2 & \textbf{Token.} Recovering an individual from the access token embedded in
+the survey link & \textbf{Closed by design.} \texttt{SurveyTokenPayload} is
+\texttt{\{ surveyId, cycleId, deadline \}} only. One token is minted per
+\emph{cycle}, not per recipient, so the token is byte-identical for every
+developer on the project and carries no per-person information \\
+\addlinespace
+A3 & \textbf{Recipient join.} Correlating \texttt{survey\_recipient} rows
+against \texttt{survey\_response} rows & \textbf{Closed.}
+\texttt{survey\_recipient} records that a send was attempted and its outcome
+(\texttt{sent}/\texttt{skipped}/\texttt{failed}). The only column it shares with
+\texttt{survey\_response} is \texttt{survey\_id}, which is common to every
+respondent, so the join is one-to-many in both directions and yields no
+pairing \\
+\addlinespace
+A4 & \textbf{Timing.} Ordering responses by \texttt{submitted\_at} and
+correlating against delivery times or individual working patterns &
+\textbf{Open, statistical.} \texttt{submitted\_at} is stored at full precision
+and is not coarsened. Because the link is broadcast once per cycle rather than
+staggered per person, delivery time carries no per-person signal; but an
+administrator could still correlate submission time against a developer's own
+commit or CI activity, which the platform itself records. Narrowing rather than
+identification, and harder as cohort size grows \\
+\addlinespace
+A5 & \textbf{Small cohort.} Inferring authorship on a project with very few
+eligible respondents & \textbf{Open, statistical.} With few eligible respondents
+the set of possible authors is small. This is a property of team size rather
+than of anything the system stores, and narrows rather than identifies \\
+\addlinespace
+A6 & \textbf{Content.} A respondent identifying themselves within a free-text
+answer, or writing in a recognisable style & \textbf{Open, irreducible.} No
+technical control can prevent a respondent from identifying themselves in their
+own words \\
+\end{longtable}
+
+\paragraph{Analysis and conclusion.} Route A1 is \textbf{closed structurally}:
+direct attribution cannot be added without changing the response schema. Routes
+A2 and A3 are closed by the current application and data design, but not by the
+response schema alone. A future code change could mint a different token per
+recipient, and a future schema or dispatch change could introduce a joinable
+identifier. The defensible claim is therefore narrower: the stored response has
+no direct identity field, while the shared-token and non-joinable-recipient
+properties were verified by inspection of the evaluated implementation.
+
+Routes A4--A6 are \textbf{statistical rather than structural}: they concern what
+could be inferred from context, not what the system stores. \textbf{Respondent
+anonymity is therefore enforced wherever the system can enforce it} --- no
+stored response carries a respondent identity, the survey link is identical for
+every recipient, and delivery records cannot be joined to responses. The
+remaining routes depend on timing, team size and what respondents choose to
+write, and no survey system can close them technically.
+
+\subsection{INV-3: Availability of AI-Assisted Action Search}
+\label{subsec:inv3}
+
+\paragraph{Research question.} The action-search subsystem contains an ordinary
+PostgreSQL lexical path and an explicitly requested \texttt{mode=deep} path that
+reranks candidates through Pinecone. Lexical matching is fast and
+provider-independent, but can miss conceptually related actions and problems
+when they use different words; AI-assisted reranking exists to recover that
+semantic similarity. A separate asynchronous pipeline generates Gemini
+embeddings for actions. NFR-13 requires optional external-service
+unavailability to produce graceful degradation. Does a deep-search request fall
+back to lexical search when the reranker is unavailable, and what evidence
+supports that behaviour?
+
+\paragraph{Method.} The action-search endpoint was traced through its
+request-handling and search-service layers. The acceptance criterion for full
+conformance with NFR-13 was fixed before judging the result: when deep mode is
+requested and Pinecone is unavailable, the endpoint must return lexical results
+successfully and identify the serving path as lexical in its response metadata.
+The three action-search test suites were then executed to determine whether that
+failover is asserted automatically. Their test cases were reviewed as well as
+counted, because a passing suite is evidence only for the behaviours it actually
+asserts.
+
+\paragraph{Results.} All 11 tests in the three suites pass (11/11, 836\,ms).
+They assert query sanitisation and action scoping, Gemini request construction
+and provider-response classification, and Pinecone result mapping and
+malformed-score rejection. They do \textbf{not} invoke \texttt{searchActions()}
+while the provider is unavailable, and therefore do not test lexical failover.
+
+Inspection shows that the two paths currently remain separate rather than
+switching automatically. With deep mode absent, the service calls PostgreSQL
+lexical search and reports lexical mode. With deep mode requested, an
+unavailable reranker produces an availability exception that the request layer
+maps to HTTP \textbf{503} rather than initiating lexical retrieval. The
+search-mode response metadata is set only after the service returns
+successfully. Exposing that metadata cross-origin makes successful path
+selection observable, but does not create automatic failover.
+
+One availability property does hold independently: the embedding write path is
+asynchronous, so logging an action does not block on Gemini. The embedding
+record moves through pending, processing, ready and failed states, while a
+content hash prevents unchanged actions from being embedded repeatedly. These
+properties protect action creation, but they do not change the HTTP 503
+behaviour of a requested deep search.
+
+\paragraph{Analysis and conclusion.} NFR-13 is \textbf{partially satisfied}.
+Ordinary lexical search remains usable without either AI provider, so the action
+log remains searchable during an outage. A user who explicitly requests deep
+search, however, receives a 503 when Pinecone is unavailable, so the experience
+does not yet meet the stated graceful-degradation criterion. Full conformance
+requires catching \texttt{ActionRerankingUnavailableError}, executing the
+lexical query, returning HTTP 200 with \texttt{x-action-search-mode: lexical},
+and adding integration tests for both unconfigured and temporarily unavailable
+provider cases.
+
+The honest limitation is that this establishes path availability, not retrieval
+quality. The investigation does \textbf{not} show that Pinecone reranking
+returns more relevant results than lexical search. Establishing that would
+require a labelled query corpus with relevance judgements fixed in advance,
+measured by recall@5 and mean reciprocal rank against the lexical baseline. That
+corpus does not exist: the action log accumulates from first use (C-06) and
+there is no partner action history to draw on.
+
+A second exposure is that survey question generation and survey insight
+generation also have no non-AI substitute: an extended Gemini outage postpones a
+survey cycle rather than serving a reduced version of it. This is recorded as
+residual risk R2 in \Cref{subsec:planning}.
+
+\subsection{INV-4: Rate-Limit Headroom of Portfolio Synchronisation}
+\label{subsec:inv4}
+
+\paragraph{Research question.} Constraint C-03 confines the system to free
+service tiers, and \Cref{ch:requirements} records the resulting conflict between
+the client's expectation of current data and the providers' published rate
+limits. Scheduled synchronisation (FR-18) fans out across every configured
+project, and all projects imported from one workspace share a single access
+credential. How many projects can one credential carry before a scheduled run
+exhausts its quota?
+
+\paragraph{Method and measured parameters.} The governing parameters were read
+from the shipped configuration and code rather than assumed
+(\Cref{tab:sync-parameters}).
+
+\begin{longtable}{
+  >{\raggedright\arraybackslash}p{0.30\textwidth}
+  >{\raggedright\arraybackslash}p{0.28\textwidth}
+  >{\raggedright\arraybackslash}p{0.30\textwidth}
+}
+\caption{Measured throttling and scheduling parameters}
+\label{tab:sync-parameters}\\
+\toprule
+\textbf{Parameter} & \textbf{Value} & \textbf{Source} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Parameter} & \textbf{Value} & \textbf{Source} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+Per-project tool fetch concurrency & 4 & Worker configuration, confirmed by
+inspection \\
+\addlinespace
+Concurrency primitive & Bounded worker pool, rejects non-positive integers &
+Shared synchronisation utility, unit-tested \\
+\addlinespace
+Spacing between projects sharing one credential & 10\,min default (bounded
+0--240) & Scheduling configuration, confirmed by inspection \\
+\addlinespace
+Maximum scheduling spread & 180\,min default (bounded 0--1440) & Scheduling
+configuration, confirmed by inspection \\
+\addlinespace
+Schedule time zone & Configurable, default UTC & Scheduling configuration,
+confirmed by inspection \\
+\addlinespace
+Schedule times & Comma-separated HH:MM, validated and range-checked &
+Configuration parser and validation tests \\
+\addlinespace
+Idempotency of a retried tick & Deterministic job ID per project and slot &
+Synchronisation service and scheduled-worker tests \\
+\addlinespace
+GitHub GraphQL rate-limit guard & Pre-flight check of remaining quota against a
+threshold & Version-control connector inspection \\
+\end{longtable}
+
+The scheduler assigns project index $i$ the delay $\min(iS, W)$. Where $S$ is
+positive, this provides $\lfloor W/S \rfloor + 1$ distinct launch positions,
+including time zero and the maximum-delay position. With the defaults
+($S = 10$ minutes, $W = 180$ minutes), there are therefore \textbf{19 distinct
+positions}: 0, 10, \ldots, 180 minutes. Projects 1--19 can occupy distinct
+scheduled positions; project 20 and every subsequent project in the same
+credential bucket are also assigned minute 180 and begin to overlap at the
+scheduling level.
+
+This calculation bounds launch spacing, not the number of simultaneously running
+syncs. Actual overlap also depends on each sync's wall-clock duration, BullMQ
+worker concurrency and queue backlog. Likewise,
+\texttt{TOOL\_FETCH\_CONCURRENCY = 4} caps connector work \emph{inside one
+project sync}; it is not a bound of four concurrent project syncs and cannot by
+itself establish compliance with a provider quota.
+
+\paragraph{Results and limitation.} The derivation above is sound but
+\textbf{incomplete in one input}: the number of API calls issued per connector
+per project sync was not instrumented, so the ceiling cannot be expressed in
+projects-per-credential against a provider's published quota. Reading it off the
+source is unreliable because the GitHub connector paginates and issues both REST
+and GraphQL calls whose count depends on repository size.
+
+\paragraph{Analysis and conclusion.} Two narrower conclusions are supported.
+First, staggering reduces the initial request burst for the first 19 projects in
+a credential bucket, while the per-project worker pool bounds simultaneous
+connector fetches within each sync. Neither fact proves that rate-limit failure
+becomes merely a longer run; that claim requires the missing call-count,
+duration and worker-concurrency measurements. Second, the deterministic job
+identifier makes a retried scheduled tick a no-op (NFR-12), so retrying the same
+slot does not duplicate that slot's request volume. The projects-per-credential
+ceiling remains unknown and is recorded as residual risk R1 in
+\Cref{subsec:planning}.
+
+\subsection{Synthesis}
+\label{subsec:synthesis}
+
+The four investigations support four bounded conclusions about the built system.
+The scoring model's treatment of missing data is \textbf{sound by
+construction} --- the rejected alternative would have scored an otherwise
+identical project 12 instead of 80 on the worked example of \Cref{subsec:inv1},
+purely for having one tool unconfigured --- which is the basis for the
+cross-project comparability claimed by O-02. \textbf{Respondent anonymity is
+enforced}: survey responses contain no identity field, the per-cycle token
+carries no per-person information, and delivery records cannot be joined to
+responses; the residual routes are statistical inferences from context rather
+than stored linkages. AI-assisted reranking addresses semantic relationships
+that lexical matching can miss; ordinary lexical search remains available
+without AI, while explicit deep search currently returns 503 when Pinecone is
+unavailable, so NFR-13 is partially met. Scheduled synchronisation has verified
+staggering and idempotency controls, but its projects-per-credential capacity
+remains unquantified until runtime request counts and durations are measured.
+
+Collectively, the investigations also validate the decision recorded in
+\Cref{ch:requirements} to prefer a rule-based scoring model over a learned or
+LLM-judged one: INV-1 was possible \emph{at all} only because the model is
+deterministic and decomposable, and neither of the rejected alternatives could
+have been audited this way.
 
 \section{Performance Evaluation}
-\label{sec:evaluation}
-\guidance{Evaluate the system against every requirement and objective. Describe the
-setup, tools, inputs, and acceptance criteria; present the results (tests,
-measurements, security checks, user or partner acceptance, experiments as
-appropriate); state which requirements are met and clearly explain each
-deviation.}
+\label{sec:performance}
+
+\subsection{Setup, Tooling and Acceptance Criteria}
+\label{subsec:eval-setup}
+
+Every change reaching the main branch is validated by an automated pipeline that
+is a required status check under branch protection. The evaluation below
+therefore describes a branch state that is, by construction, the state of every
+merged change rather than a specially prepared build.
+
+The pipeline applies a path filter (\texttt{dorny/paths-filter}) so that a
+backend-only change does not run frontend jobs and vice versa, with a
+\texttt{concurrency} group that cancels superseded runs,
+\texttt{permissions: contents: read}, and a single aggregate \texttt{ci-ok} job
+that treats a skipped one-sided job as a pass and any failure or cancellation as
+a failure.
+
+For the backend the pipeline runs, in order: strict TypeScript type checking,
+ESLint, a production build, \texttt{test:coverage} (Vitest with V8 coverage),
+and \texttt{test:actions} (three \texttt{node:test} suites). For the frontend it
+runs type checking, linting and a production build with
+\nolinkurl{VITE_API_BASE_URL=/api/v1} baked in.
+
+\paragraph{A note on the coverage figure.} The test runner is configured to
+instrument \textbf{every backend application and library source unit}, rather
+than only units imported by a test. This is a deliberate methodological choice
+and it makes the headline number look far worse than a default configuration
+would. Default instrumentation reports the percentage of \emph{the code the
+tests already reach}, which flatters a codebase by silently excluding exactly
+the modules nobody has tested. Instrumenting every source unit means an untested
+module appears as 0\,\% rather than as an absence. The figure below is therefore
+a percentage \textbf{of the system}, not a percentage of the tested part of it,
+and \textbf{it is not comparable with a default-configured figure from another
+project.}
+
+Four verification methods are used in the tables that follow, each requirement
+being assigned the weakest method sufficient to establish it:
+
+\begin{itemize}
+  \item \textbf{T --- Test.} An automated test asserts the behaviour and runs in
+  CI on every change.
+  \item \textbf{D --- Demonstration.} The behaviour was exercised end-to-end
+  against the running system and observed.
+  \item \textbf{I --- Inspection.} The property is established by reading the
+  schema, configuration or source, and is not observable at run time.
+  \item \textbf{A --- Analysis.} The property is established by derivation or by
+  one of the investigations in \Cref{sec:investigation}.
+\end{itemize}
+
+Statuses are \textbf{Met}, \textbf{Partial} (met in part, or met by a weaker
+mechanism than specified), \textbf{Not met}, and \textbf{Unverified} (not
+established by any of the four methods; no claim is made).
+
+\subsection{Measured Results}
+\label{subsec:measurements}
+
+All figures below were obtained by running the commands listed in
+\Cref{subsec:reproduction}.
+
+\begin{longtable}{
+  >{\raggedright\arraybackslash}p{0.42\textwidth}
+  >{\raggedright\arraybackslash}p{0.48\textwidth}
+}
+\caption{Quantitative results}
+\label{tab:measurements}\\
+\toprule
+\textbf{Measure} & \textbf{Result} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Measure} & \textbf{Result} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+TypeScript strict type check (backend) & \textbf{Pass} (exit 0) \\
+ESLint (backend) & \textbf{Pass} (exit 0) --- no blocking findings and 131
+warnings, predominantly \texttt{@typescript-eslint/no-explicit-any} \\
+Vitest suites & \textbf{20 files, 131 tests, 131 passed, 0 failed}, 3.15\,s \\
+\texttt{node:test} action-search suites & \textbf{11 tests, 11 passed, 0
+failed}, 836\,ms \\
+Total automated tests & \textbf{142 across 23 test files} \\
+Statement coverage (all-files instrumented) & 12.37\,\% (722 / 5,835) \\
+Branch coverage & 12.34\,\% (489 / 3,961) \\
+Function coverage & 9.75\,\% (99 / 1,015) \\
+Line coverage & 12.93\,\% (685 / 5,295) \\
+Frontend automated tests & \textbf{None} \\
+\end{longtable}
+
+\begin{longtable}{
+  >{\raggedright\arraybackslash}p{0.30\textwidth}
+  >{\raggedright\arraybackslash}p{0.14\textwidth}
+  >{\raggedright\arraybackslash}p{0.44\textwidth}
+}
+\caption{Statement coverage by area, showing where testing effort was
+concentrated}
+\label{tab:coverage-by-area}\\
+\toprule
+\textbf{Area} & \textbf{Statement coverage} & \textbf{Interpretation} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Area} & \textbf{Statement coverage} & \textbf{Interpretation} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+Security and token utilities & \textbf{91.66\,\%} & The cryptographic core is
+the most heavily tested code in the system, appropriately \\
+\addlinespace
+Version-control throttling and retry utility & 69.56\,\% & Provider throttling
+and retry behaviour \\
+\addlinespace
+Risk-engine subsystem & 52.38\,\% & The eight strategies and scoring arithmetic
+are covered; the dispatcher and descriptive signal catalogue are untested \\
+\addlinespace
+Synchronisation utilities & 52.17\,\% & Bounded-concurrency behaviour is
+covered; connector registration is untested \\
+\addlinespace
+\texttt{GithubActions} / \texttt{Github} connectors & 14.67\,\% / 12.79\,\% &
+Exercised only incidentally \\
+\addlinespace
+\texttt{Jira}, \texttt{SonarQube}, \texttt{GitLab}, \texttt{Linear} connectors &
+0\,\% & Not unit-tested; validated by demonstration against live APIs instead \\
+\addlinespace
+Queueing, notifications, embeddings, authentication and reranking & 0\,\% &
+I/O-boundary modules, exercised through doubles or by demonstration \\
+\end{longtable}
+
+\paragraph{Interpretation.} The distribution is more informative than the
+headline. Testing effort went where correctness is both critical and cheaply
+assertable --- cryptography, scoring arithmetic, concurrency bounds --- and the
+near-zero areas are overwhelmingly I/O boundaries against third-party services,
+which unit tests can only assert against a double anyway. That is a defensible
+allocation under constraint C-02 (no dedicated QA member). It is nonetheless a
+real limitation, and it should be stated plainly rather than explained away:
+\textbf{NFR-22 requires scoring rules to be documented and covered by automated
+tests and that is satisfied, but the system as a whole rests on 142 tests and
+has no frontend test at all.} A regression in the React application would be
+caught only by type checking, linting and manual use.
+
+\paragraph{Security review.} \Cref{ch:requirements} commits the project to
+OWASP-aligned practice. The team reviewed the implementation manually against
+the OWASP Top~10 --- authentication and session handling, access control,
+injection, cryptographic storage of connector credentials, and rate limiting of
+the unauthenticated survey endpoint. The codebase was additionally analysed with
+SonarQube through Pulse's own SonarQube connector, so the platform's security
+dimension was applied to its own repository. This is an internal review rather
+than an independent third-party assessment.
+
+\paragraph{Partner acceptance.} The system was not piloted against SSCL's own
+GitHub, Jira or SonarCloud data. Evaluation used the team's own repositories and
+tool accounts, which exercised every connector end to end without bringing
+partner data into the development environment. The system was instead reviewed
+with SSCL's Chief Technical Officer in five meetings, each held after a major
+improvement (\Cref{subsec:multidisciplinary}).
+
+\subsection{Evaluation Against Functional Requirements}
+\label{subsec:eval-fr}
+
+\begin{longtable}{
+  >{\raggedright\arraybackslash}p{0.07\textwidth}
+  >{\raggedright\arraybackslash}p{0.06\textwidth}
+  >{\raggedright\arraybackslash}p{0.57\textwidth}
+  >{\raggedright\arraybackslash}p{0.13\textwidth}
+}
+\caption{Verification of functional requirements}
+\label{tab:fr-verification}\\
+\toprule
+\textbf{ID} & \textbf{M.} & \textbf{Evidence} & \textbf{Status} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{ID} & \textbf{M.} & \textbf{Evidence} & \textbf{Status} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+FR-01 & I, D & Registration creates a company and administrator account; a
+one-time verification code is retained transiently and the account is created
+only after verification & Met \\
+FR-02 & T, I & Login service and persisted server-side session store & Met \\
+FR-03 & I & Single-use reset token; the reset flow explicitly invalidates every
+existing session belonging to the user & Met \\
+FR-04 & I, D & Single-use invitation accepted during registration or by an
+authenticated account & Met \\
+FR-05 & T, I & Central authorisation service and requester-role resolution;
+member access gated on project-membership records & Met \\
+FR-06 & D & Administrator removes a \texttt{projectmember} row & Met \\
+FR-07 & D & Workspace endpoint binds a workspace to its provider, organisation
+identifier and access token & Met \\
+FR-08 & D & Workspace interface lists reachable repositories through the
+provider adapter before any persistence & Met \\
+FR-09 & D & Selected repositories imported as \texttt{project} rows & Met \\
+FR-10 & D & Subsequent import excludes already-imported repositories & Met \\
+FR-11 & D & Per-project \texttt{projecttoolintegration} rows for PM, quality and
+CI/CD; VCS credential inherited from workspace & Met \\
+FR-12 & I, D & Credentials masked by default; reveal is a separate
+administrator-restricted action & Met \\
+FR-13 & D & \texttt{POST /sync} enqueues a job and returns job ID and stream key
+immediately & Met \\
+FR-14 & T, D & Implemented connectors cover VCS, issue tracking, code analysis
+and CI/CD & Met \\
+FR-15 & I & One \texttt{projectsnapshot} row per run; raw metrics as JSONB in
+four per-domain tables keyed by \texttt{snapshot\_id}; no update path & Met \\
+FR-16 & D & SSE over \texttt{/progress}; per-tool status rendered by
+\texttt{SyncProgressBanner} & Met \\
+FR-17 & I, D & Persistent event store replays missed progress events to a
+reconnecting client & Met \\
+FR-18 & T, I & Schedule queue is reconciled from configured times when the
+worker starts; covered by scheduled-worker tests & Met \\
+FR-19 & I & Synchronisation processing tracks unsuccessful tools, marks each
+tool's outcome, persists successful results and reports the run as partial &
+Met \\
+FR-20 & T & Eight strategy classes, each with its own automated test suite &
+Met \\
+FR-21 & T & Overall score composed from dimension scores per snapshot;
+\texttt{riskscore.overall\_score} & Met \\
+FR-22 & T, A & Scoring tests assert that missing signals are excluded and
+remaining weights are renormalised to sum to one; design rationale in
+\Cref{subsec:inv1} & Met \\
+FR-23 & I & \texttt{riskscore} rows keyed to \texttt{project\_snapshot\_id}
+(unique) & Met \\
+FR-24 & D & Portfolio dashboard lists accessible projects with overall score,
+dimension scores and trend & Met \\
+FR-25 & D & Per-project view with current score, trend and dimension history
+(Recharts) & Met \\
+FR-26 & D, I & Score-breakdown interface renders contributing signals, values,
+weights and contributions from the signal catalogue & Met \\
+FR-27 & I, D & Survey-question service generates from health scores, trend and
+notable metric conditions & Met \\
+FR-28 & T & Deterministic deduplication followed by a scoring prompt with a
+configurable minimum score of 60 & Met \\
+FR-29 & I, D & Questions editable while \texttt{draft}; editing rejected once
+\texttt{sent\_at} is set & Met \\
+FR-30 & T, I & Distribution processor assigns a randomised monthly send moment
+per project within a configurable window, fixed once assigned & Met \\
+FR-31 & D & On-demand dispatch available to an authorised user & Met (pending
+confirmation) \\
+FR-32 & I, D & One anonymous link per cycle, broadcast to configured channels and
+emailed individually to eligible developers & Met \\
+FR-33 & I & Cooldown enforced from \texttt{survey\_recipient} history against
+\texttt{SURVEY\_MIN\_DAYS\_BETWEEN\_SURVEYS} (default 15, bounded 1--60);
+skipped sends recorded with \texttt{skip\_reason: 'cooldown\_active'}. Fair
+rotation between a developer's projects is unconfirmed & Partial \\
+FR-34 & T & Automated token tests cover decoding, cycle validation and deadline
+expiry & Met \\
+FR-35 & I, D & Survey-insight service produces category scores, themes,
+narrative summary and per-question summaries on close & Met \\
+FR-36 & I, D & \texttt{project\_survey\_status.pending\_survey} raised when
+configured thresholds are breached & Met \\
+FR-37 & D & \texttt{actions} row carrying problem, reason, action taken, date
+and affected \texttt{project\_ids} & Met \\
+FR-38 & D & Per-project and company-wide listings, scoped by role & Met \\
+FR-39 & T, A & Lexical search and optional Pinecone reranking are implemented.
+Ordinary lexical retrieval remains available without AI, but a requested deep
+search returns 503 rather than falling back when Pinecone is unavailable;
+investigation INV-3 (\Cref{subsec:inv3}) & Partial \\
+FR-40 & I, D & \texttt{next\_review\_at} with deferral presets; non-modal
+\texttt{WeeklyReviewBanner} and \texttt{InlineRating} & Met \\
+FR-41 & I & Author may modify or delete own actions; administrator may do so for
+any action in the company (\texttt{logged\_by\_user\_id},
+\texttt{company\_id} on \texttt{actions}) & Met \\
+\end{longtable}
+
+\subsection{Evaluation Against Non-Functional Requirements}
+\label{subsec:eval-nfr}
+
+\begin{longtable}{
+  >{\raggedright\arraybackslash}p{0.08\textwidth}
+  >{\raggedright\arraybackslash}p{0.06\textwidth}
+  >{\raggedright\arraybackslash}p{0.56\textwidth}
+  >{\raggedright\arraybackslash}p{0.13\textwidth}
+}
+\caption{Verification of non-functional requirements}
+\label{tab:nfr-verification}\\
+\toprule
+\textbf{ID} & \textbf{M.} & \textbf{Evidence} & \textbf{Status} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{ID} & \textbf{M.} & \textbf{Evidence} & \textbf{Status} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+NFR-01 & T, I & Credential-security subsystem encrypts connector secrets at rest
+with AES-256-GCM, a 12-byte random IV per record and a 16-byte authentication
+tag; 92.59\,\% statement coverage & Met \\
+NFR-02 & I & \texttt{bcryptjs} at 10 rounds, 8-character minimum enforced at
+registration; no recovery path exists & Met \\
+NFR-03 & I & Session ID in a cookie with \texttt{httpOnly: true},
+\texttt{secure: env.nodeEnv === 'production'}, \texttt{sameSite: 'lax'};
+revocable via \texttt{sessionStore.destroy} / \texttt{destroyAllForUser} &
+Met \\
+NFR-04 & I & Credentials masked except through the FR-12 reveal action;
+credential used as a scheduling grouping key is reduced to a one-way hash first
+& Met (pending confirmation) \\
+NFR-05 & I & Request-rate limiting is applied to the public survey endpoint with
+distinct limits for form retrieval and submission; this is the only
+unauthenticated endpoint family & Met \\
+NFR-06 & T & AES-256-GCM authentication tag makes modification of the embedded
+\texttt{surveyId}, \texttt{cycleId} or \texttt{deadline} fail decode rather than
+succeed with altered values; \texttt{decodeToken} returns \texttt{null} rather
+than throwing & Met \\
+NFR-07 & I, A & No identity column or user foreign key on
+\texttt{survey\_response} (structural); the shared-token and
+non-joinable-recipient properties were verified by inspection
+(\Cref{subsec:inv2}) & Met \\
+NFR-08 & I & Aggregate survey insight is generated only once the number of
+responses reaches the configured minimum
+(\texttt{SURVEY\_MIN\_ANONYMOUS\_RESPONSES}, default 5, floor 3); below it, no
+insight is produced & Met \\
+NFR-09 & I & No personal identifiers found in the AI payload construction:
+inspection for author, assignee, login, email, issue-key and branch fields found
+only aggregate scores, depersonalised conditions, the project name and
+respondent count. \textbf{However, free-text survey answers are transmitted
+verbatim and may contain names the system cannot strip} (gap G-03) & Partial \\
+NFR-10 & I & A failing connector does not abort the remaining connectors; the
+run is recorded as partial (\texttt{failedTools[]}) & Met \\
+NFR-11 & I & BullMQ retry with increasing backoff on every queue & Met \\
+NFR-12 & T & Deterministic job identifier per project and time slot makes a
+repeated or retried tick a no-op & Met \\
+NFR-13 & I, A & Lexical search remains available as the ordinary mode, but it is
+not used as failover: an unconfigured or failed Pinecone deep search returns
+HTTP 503. The current tests do not assert failover. Survey question and insight
+generation also have no non-AI substitute (\Cref{subsec:inv3}) & Partial \\
+NFR-14 & I & Compensating logic on multi-table operations, required because the
+Supabase REST client exposes no cross-table transaction (C-04) & Unverified \\
+NFR-15 & T & The bounded worker pool limits parallel connector calls to four;
+automated concurrency tests verify the bound & Met \\
+NFR-16 & A & Projects sharing a credential staggered by
+\texttt{SCHEDULED\_SYNC\_PAT\_SPACING\_MINUTES} (default 10) within
+\texttt{SCHEDULED\_SYNC\_MAX\_SPREAD\_MINUTES} (default 180); GitHub connector
+performs a pre-flight \texttt{rateLimit.remaining} check. Investigation INV-4
+derives the headroom but lacks the per-connector call count & Partial \\
+NFR-17 & I & Dashboard reads are served from stored snapshots; no dashboard
+route calls an external tool & Met \\
+NFR-18 & --- & A usability claim about the client's workflow that cannot be
+established by inspection & Unverified \\
+NFR-19 & D & Per-tool progress visible during a running synchronisation via SSE
+& Met \\
+NFR-20 & D, I & Any dimension score expands into its contributing signals with
+values, weights and contributions & Met \\
+NFR-21 & A & A connector registry maps each tool name to a factory behind a
+shared interface; the risk engine consumes a typed metrics bundle rather than
+provider-specific data. Six connectors coexist without changing the scoring
+subsystem & Met \\
+NFR-22 & T & Per-strategy and scoring-arithmetic unit tests; scoring rules
+maintained in dedicated internal documentation & Met \\
+NFR-23 & T & Type check, lint, build and tests are a required \texttt{ci-ok}
+check before merge; the type check, lint and test commands were re-run
+successfully for this evaluation & Met \\
+NFR-24 & I & All configuration supplied through environment variables; no
+credential or endpoint literal in source & Met \\
+NFR-25 & I & Container configuration uses a Node~20 Alpine image and defines
+Redis, API and worker services; the worker runs from the same application image
+with an overridden command & Met \\
+NFR-26 & I & Scheduling configured by named time zone
+(\texttt{SCHEDULED\_SYNC\_TZ}, default UTC), independent of the host clock; a
+migration converted naive timestamps to \texttt{timestamptz} & Met \\
+\end{longtable}
+
+\subsection{Evaluation Against Project Objectives}
+\label{subsec:eval-objectives}
+
+\begin{longtable}{
+  >{\raggedright\arraybackslash}p{0.06\textwidth}
+  >{\raggedright\arraybackslash}p{0.62\textwidth}
+  >{\raggedright\arraybackslash}p{0.17\textwidth}
+}
+\caption{Achievement of project objectives}
+\label{tab:objective-achievement}\\
+\toprule
+\textbf{ID} & \textbf{Basis of assessment} & \textbf{Outcome} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{ID} & \textbf{Basis of assessment} & \textbf{Outcome} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+O-01 & FR-13, FR-14, FR-24, FR-25 met: all four tool categories ingested and
+presented in one view & \textbf{Achieved} \\
+\addlinespace
+O-02 & FR-20--FR-22 met; \Cref{subsec:inv1} establishes that the comparability
+claim survives partial tool coverage, and that the rejected alternative would
+have made tool coverage the dominant term in the score & \textbf{Achieved} \\
+\addlinespace
+O-03 & FR-26 and NFR-20 met: every score decomposes into named signals with
+measured values, applied weights and individual contributions.
+\Cref{subsec:inv1} records that this explainability is what ruled out the
+imputation alternatives, since neither can state a breakdown in terms of the
+project's own metrics & \textbf{Achieved} \\
+\addlinespace
+O-04 & NFR-07 and NFR-08 met: the response schema prevents direct identity
+storage (INV-2 route A1), and the shared per-cycle token and non-joinable
+recipient table close every inspected linkage route (\Cref{subsec:inv2}).
+Respondent anonymity is enforced by the data model rather than promised by
+policy & \textbf{Achieved} \\
+\addlinespace
+O-05 & FR-37--FR-38 and FR-40--FR-41 are met, while FR-39 is partial: actions
+are recorded, retrievable lexically and optionally reranked through Pinecone,
+but deep retrieval fails with 503 during provider unavailability. Whether
+interventions \emph{demonstrably worked} cannot be assessed --- that requires a
+deployment period longer than the project had, since effectiveness ratings only
+become meaningful weeks after an action & \textbf{Partially achieved as a
+mechanism} \\
+\addlinespace
+O-06 & FR-18 and NFR-12 met: scheduled synchronisation accumulates history
+without user action, idempotently & \textbf{Achieved} \\
+\addlinespace
+O-07 & NFR-21 met: six connectors across four categories coexist without
+modification to the scoring logic --- two more than the four in scope &
+\textbf{Achieved, exceeded} \\
+\end{longtable}
+
+\subsection{Summary of Conformance}
+\label{subsec:conformance-summary}
+
+Of 41 functional requirements, \textbf{38 are met}, one is met pending a
+confirmation the team must make (FR-31), and two are partial (FR-33, rotation
+fairness unconfirmed; and FR-39, no deep-search failover). Of 26 non-functional
+requirements, \textbf{21 are met}, three are partial (NFR-09, NFR-13, NFR-16)
+and two are unverified by any admissible method (NFR-14, NFR-18). Of seven
+objectives, five are achieved, one is achieved and exceeded (O-07), and one
+(O-05) is partially achieved.
+
+\subsection{Reproducing the Measurements}
+\label{subsec:reproduction}
+
+Every repository-derived quantitative figure in this chapter can be regenerated
+using the commands in \Cref{tab:reproduction}.
+
+\begin{longtable}{
+  >{\raggedright\arraybackslash}p{0.38\textwidth}
+  >{\raggedright\arraybackslash}p{0.52\textwidth}
+}
+\caption{Commands reproducing the measurements}
+\label{tab:reproduction}\\
+\toprule
+\textbf{Figure} & \textbf{Command} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Figure} & \textbf{Command} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+Type check (\Cref{tab:measurements}) & \texttt{cd backend \&\& npm run
+typecheck} \\
+Lint findings and warning counts & \texttt{cd backend \&\& npm run lint} \\
+Vitest file/test counts and pass state & \texttt{cd backend \&\& npx vitest
+run} \\
+Coverage, overall and per-area (\Cref{tab:measurements,tab:coverage-by-area}) &
+\texttt{cd backend \&\& npm run test:coverage} \\
+Action-search suite (INV-3) & \texttt{cd backend \&\& npm run test:actions} \\
+Test file and case counts & \texttt{find backend/apps backend/libs
+backend/tests -name "*.test.ts" \textbar{} wc -l} \\
+\end{longtable}
+
+\Cref{subsec:inv1} cites \nolinkurl{backend/libs/risk-engines/scoring.test.ts}
+(assertions at lines 48, 56, 68, 80 and 89) and the weight vector in
+\nolinkurl{backend/libs/risk-engines/risks/security/security.strategy.ts}. The
+worked example is arithmetic and can be checked by hand against those weights.
 
 \section{Deviations and Design Revisions}
-\label{sec:revisions}
-\guidance{For each deviation, give the technical analysis of its cause and the
-design revision made to achieve compliance, or explain why it was not
-revised.}
+\label{sec:deviations}
+
+Each deviation is given with its symptom, the technical analysis of its cause,
+and the design revision made --- or the reason none was made.
+
+\subsection{Transactional Email: Gmail SMTP Replaced by the Brevo HTTP API}
+\label{subsec:deviation-email}
+
+\paragraph{Symptom.} Transactional email --- verification codes, password
+resets, invitations and survey links --- was initially delivered through
+Nodemailer over Gmail SMTP and proved unreliable at the volume a multi-project
+portfolio produces. A single survey dispatch sends one message per eligible
+developer per project, and the scheduled distribution concentrates those sends
+into a short window.
+
+\paragraph{Cause.} A consumer mail account applies per-account sending limits
+and reputation-based filtering that are not designed for machine-generated
+transactional mail. Compounding this, SMTP introduces a stateful connection and
+authentication handshake onto a path that must be stateless and cheaply
+retryable from a background worker.
+
+\paragraph{Revision.} Delivery was moved to Brevo's HTTP API. The email service
+now uses a single idempotent HTTPS request instead of an SMTP connection,
+allowing the existing queue retry policy (NFR-11) to handle transient provider
+unavailability consistently. When no Brevo credential is configured, the service
+records the intended message without sending it, so local development needs no
+mail credential. No requirement changed; the mechanism satisfying it did.
+
+\subsection{Removal of Manual Guidance from Survey Question Generation}
+\label{subsec:deviation-guidance}
+
+\paragraph{Symptom.} An earlier design allowed an administrator to inject
+free-text guidance to steer AI question generation. In use, guidance text
+propagated into the wording of the generated questions.
+
+\paragraph{Cause.} This is a leading-question problem rather than a
+prompt-engineering limitation, and could not have been addressed by better
+prompting. A survey whose questions are shaped by a manager's stated concern
+measures that concern rather than the team's state, and the resulting insight is
+then presented to the same manager as an independent reading of team health. The
+mechanism therefore undermined the objectivity that the risk-engine-driven
+design exists to provide, and indirectly the candour on which the whole survey
+subsystem depends.
+
+\paragraph{Revision.} The override path was removed entirely. Questions now
+derive strictly from computed risk scores, their trend and raw connector
+metrics, as FR-27 specifies. Removing rather than constraining the feature was
+deliberate: a constrained override would have had to be policed by judgement on
+every use, whereas an absent one cannot be misused. The
+\texttt{custom\_guidance} column survives on the \texttt{survey} table as
+dormant schema and should be dropped in a future migration.
+
+\subsection{Project Tracking State Moved to Persisted Storage}
+\label{subsec:deviation-tracking}
+
+\paragraph{Symptom.} The portfolio ``tracked''/bookmark state, initially held in
+browser-local storage, did not survive a change of device or browser, so a
+manager's curated portfolio view was silently lost.
+
+\paragraph{Cause.} The state is a property of the user's relationship to a
+project, not of the browser session, and had been placed at the wrong
+architectural layer.
+
+\paragraph{Revision.} \texttt{is\_tracked} was added as a persisted column,
+exposed through the health feed and an administrator toggle endpoint, and the
+portfolio filter and bookmark control were wired to read and write it.
+
+\subsection{Scope Exceeded: Connectors and Notification Channels Beyond
+Specification}
+\label{subsec:deviation-connectors}
+
+\Cref{ch:problem} scopes the work to one connector per category --- GitHub,
+Jira, SonarCloud and GitHub Actions --- and scopes survey broadcast to Slack and
+Discord. The delivered system contains \textbf{six} connectors (adding GitLab
+under VCS and Linear under project management) and \textbf{three} notification
+channels (adding Telegram), all behind the same interfaces.
+
+This is an extension beyond scope rather than a shortfall, and it is positive
+evidence for NFR-21 and objective O-07: additional providers were absorbed
+without any change to the scoring logic. It is declared here because
+\Cref{ch:problem}'s scope statement predates these additions.
+
+\subsection{Acknowledged Limitation: Score Confidence Is Not Expressed}
+\label{subsec:deviation-confidence}
+
+\Cref{subsec:inv1} establishes that renormalisation removes the bias
+zero-imputation would introduce, but it cannot recover the information an
+absent signal would have carried: a score computed from two signals is a weaker
+estimate than one computed from six, and the interface presents both
+identically. Team health is most exposed, having only four signals, so one
+absent input removes a quarter of the evidence behind the score.
+
+No requirement demands otherwise, so this was recorded as a limitation rather
+than non-conformance: a manager comparing two projects in the portfolio view
+cannot see that one score rests on materially less evidence than the other,
+which is precisely the comparison O-02 exists to support. The natural revision
+is to surface the count or weight-fraction of present signals alongside each
+score --- the \texttt{weights} array returned by
+\texttt{renormalizedWeightedScore()} and the signal catalogue already carry all
+the data required, so this is a presentation change rather than a model change.
+It is recorded as future work in \Cref{ch:conclusion}.
+
+\subsection{Deployment Topology}
+\label{subsec:deviation-deployment}
+
+\Cref{ch:research}'s feasibility study records that free hosting tiers covered
+the API and frontend but not the always-on worker, which holds long-lived BullMQ
+connections and therefore cannot run as a serverless function; it concluded that
+the worker ``remains unhosted''. That conclusion was superseded during
+development, and the system is now hosted and operational (C-08).
+
+In the deployed configuration, requests under the API path are forwarded from
+the Vercel-hosted client to the Render-hosted backend, while the worker also
+runs on Render's always-on tier. The container build produces one application
+image for both backend processes, with the worker selected through a command
+override.

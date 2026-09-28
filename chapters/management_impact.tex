@@ -1,114 +1,721 @@
-% Chapter 6 -- Rubric: PO11, PO9 (9.1--9.4), PO6 (6.1), PO7 (7.1), PO8 (8.1--8.4)
+% Chapter 6 -- Rubric: PO6 (society/health/safety), PO7 (environment/sustainability),
+% PO8 (ethics), PO9 (individual and teamwork), PO11 (project management and finance)
 \chapter{Project Management, Teamwork, and Impact}
 \label{ch:management}
 
 \section{Project Management and Finance}
+\label{sec:management}
 
 \subsection{Planning and Risk Management}
-\label{sec:plan}
-\guidance{Present the plan: phases, milestones, task distribution, and schedule,
-noting where actual progress differed. List the major risks and how they
-were mitigated.}
-\begin{figure}[htbp]
-  \centering
-  \begin{ganttchart}[
-      hgrid, vgrid, x unit=0.9cm,
-      time slot format=isodate-yearmonth, time slot unit=month,
-      title label font=\small, bar label font=\small,
-      bar/.style={fill=gray!40}
-    ]{2026-01}{2026-12}
-    \gantttitlecalendar{year, month=shortname} \\
-    \ganttbar{Requirements}{2026-01}{2026-02} \\
-    \ganttbar{Design}{2026-02}{2026-04} \\
-    \ganttbar{Implementation}{2026-04}{2026-09} \\
-    \ganttbar{Testing}{2026-08}{2026-10} \\
-    \ganttbar{Report}{2026-10}{2026-12}
-  \end{ganttchart}
-  \caption{Project schedule}
-  \label{fig:gantt}
+\label{subsec:planning}
+
+\paragraph{Process.} The project was delivered incrementally, as constraint C-01
+required: development ran across two academic semesters alongside concurrent
+coursework, so no phase could assume a block of uninterrupted time. Work
+proceeded on short feature branches merged into \texttt{main} through pull
+requests, with the automated pipeline described in \Cref{subsec:eval-setup} as a
+required check before merge.
+
+\paragraph{Phases.} Five phases were planned, ordered by dependency rather than
+preference, since each supplies the input to the next:
+
+\begin{enumerate}
+  \item \textbf{Requirements and connector feasibility.} Elicitation with SSCL
+  and study of the candidate tools' public APIs to establish which metrics were
+  obtainable in practice. This had to precede any scoring design, because the
+  constraint recorded as C-05 --- that several intended metrics are simply not
+  exposed --- determines which dimensions the model can support at all.
+  \item \textbf{Ingestion.} The connector abstraction, the snapshot data model,
+  the job queue and SSE progress streaming.
+  \item \textbf{Scoring.} The eight risk strategies, the shared null-aware
+  weighted-scoring math, and the score-breakdown presentation.
+  \item \textbf{Surveys.} Question generation and quality gating, anonymous
+  dispatch and collection, insight generation, and the scheduled monthly
+  distribution cycle.
+  \item \textbf{Action logging and consolidation.} The action log, lexical
+  search with optional AI-assisted reranking, effectiveness review, and the
+  portfolio and tracking refinements. INV-3 found that the intended
+  reranking-to-lexical failover is not implemented.
+\end{enumerate}
+
+The project ran over one year, across two academic semesters.
+\Cref{fig:schedule} shows how the phases were distributed across them. The
+unplanned work described in \Cref{subsec:deviation-email} (email provider
+migration) and \Cref{subsec:deviation-guidance} (removal of manual survey
+guidance) was absorbed within the survey phase.
+
+\begin{figure}[H]
+\centering
+\begin{ganttchart}[
+    hgrid, vgrid,
+    x unit=2.2cm, y unit chart=0.75cm, y unit title=0.7cm,
+    title label font=\small\bfseries,
+    bar label font=\small,
+    bar/.append style={fill=gray!55},
+    bar height=0.5
+  ]{1}{4}
+  \gantttitle{Semester 1}{2} \gantttitle{Semester 2}{2} \\
+  \gantttitle{First half}{1} \gantttitle{Second half}{1}
+  \gantttitle{First half}{1} \gantttitle{Second half}{1} \\
+  \ganttbar{1. Requirements and feasibility}{1}{1} \\
+  \ganttbar{2. Ingestion}{1}{2} \\
+  \ganttbar{3. Scoring}{2}{3} \\
+  \ganttbar{4. Surveys}{3}{4} \\
+  \ganttbar{5. Action logging and consolidation}{4}{4}
+\end{ganttchart}
+\caption{Phase schedule across the two semesters}
+\label{fig:schedule}
 \end{figure}
 
+\paragraph{Risk management.} Risks were identified at the start of the ingestion
+phase and reviewed at each phase boundary. \Cref{tab:risks} records each with
+the mitigation adopted and the exposure that remains after it --- the residual
+column being the one that matters, since a risk register listing only
+mitigations claims a completeness no project has.
+
+\begin{longtable}{
+  >{\raggedright\arraybackslash}p{0.05\textwidth}
+  >{\raggedright\arraybackslash}p{0.22\textwidth}
+  >{\raggedright\arraybackslash}p{0.32\textwidth}
+  >{\raggedright\arraybackslash}p{0.28\textwidth}
+}
+\caption{Project risks, mitigations and residual exposure}
+\label{tab:risks}\\
+\toprule
+\textbf{ID} & \textbf{Risk} & \textbf{Mitigation adopted} & \textbf{Residual exposure} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{ID} & \textbf{Risk} & \textbf{Mitigation adopted} & \textbf{Residual exposure} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+R1 & Third-party rate limits exhausted by portfolio-wide scheduled
+synchronisation (C-03, NFR-16) & Bounded connector concurrency (4 per project),
+staggering of projects sharing a credential (10\,min default within a 180\,min
+spread), pre-flight rate-limit checks in the GitHub connector, and product
+positioning as a trend indicator rather than a real-time monitor & A ceiling on
+projects per credential that INV-4 could not quantify for want of a
+per-connector call count; a portfolio beyond that size needs additional
+credentials \\
+\addlinespace
+R2 & Dependence on external AI providers for embeddings, reranking and text
+generation & Ordinary lexical action search remains independent of AI, and
+action embedding is asynchronous & A requested deep search returns HTTP 503
+rather than falling back when Pinecone is unavailable; survey question
+generation and insight have \textbf{no} non-AI substitute, so an extended Gemini
+outage postpones a survey cycle outright (NFR-13, INV-3) \\
+\addlinespace
+R3 & Metrics assumed available but not obtainable in practice (C-05) & API
+feasibility study before scoring design; null-aware renormalised scoring so an
+absent metric is excluded rather than penalised (FR-22), rationale in
+\Cref{subsec:inv1} & Scores computed from fewer signals are weaker estimates and
+the interface does not communicate this (\Cref{subsec:deviation-confidence}) \\
+\addlinespace
+R4 & Free-tier services withdrawn, throttled or altered mid-project & All
+environment-specific configuration externalised (NFR-24) so a provider can be
+substituted without code change --- which is precisely what made the
+Gmail-to-Brevo migration cheap & A provider change still requires a person to
+perform it; no fallback provider is pre-configured for any service \\
+\addlinespace
+R5 & Loss of team capacity to coursework and examination periods (C-01, C-02) &
+Small, independently mergeable units of work; trunk kept deployable; CI as the
+check that a returning member had not broken something they had forgotten the
+details of & Phases dependent on one member's knowledge resumed more slowly; no
+dedicated QA or operations capacity existed to absorb the gap \\
+\addlinespace
+R6 & Partner data unavailable for validation under the NDA (C-09) &
+Investigations designed to be answerable without partner data --- INV-1 argues
+from the scoring arithmetic and INV-2 from the schema, neither of which requires
+a dataset & Absent-metric behaviour (INV-1) is argued analytically rather than
+measured on real snapshots; retrieval \emph{quality} (INV-3) and rate-limit
+headroom (INV-4) remain unquantified; evaluation used the team's own
+repositories rather than partner data \\
+\addlinespace
+R7 & Anonymity guarantee eroded by later development & Direct identity storage
+is prevented by the response schema; shared-token and non-joinable-recipient
+behaviour is explicit in the current application design (INV-2) & The
+application-level properties can be weakened by later code changes without
+changing \texttt{survey\_response}; statistical inference routes A4--A6
+remain \\
+\end{longtable}
+
+R7's residual column reflects the design principle behind INV-2: guarantees
+should be placed in the schema wherever the schema can express them, because
+application-level properties such as the shared token and dispatch behaviour
+remain choices that a later change could reverse.
+
 \subsection{Budgeting and Resource Identification}
-\label{sec:budget}
-\guidance{Identify the resources required (people, hardware, software, cloud
-and API services, data) with an itemised budget.}
+\label{subsec:budget}
+
+Constraint C-03 permitted no monetary budget, so every external service was used
+within its free tier. The project incurred no monetary cost
+(\Cref{tab:budget}).
+
+\begin{longtable}{
+  >{\raggedright\arraybackslash}p{0.22\textwidth}
+  >{\raggedright\arraybackslash}p{0.42\textwidth}
+  >{\raggedright\arraybackslash}p{0.14\textwidth}
+  >{\raggedright\arraybackslash}p{0.06\textwidth}
+}
+\caption{Resources consumed and their cost}
+\label{tab:budget}\\
+\toprule
+\textbf{Resource} & \textbf{Purpose} & \textbf{Tier} & \textbf{Cost} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Resource} & \textbf{Purpose} & \textbf{Tier} & \textbf{Cost} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+Supabase (managed PostgreSQL) & Primary datastore: snapshots, scores, surveys,
+actions, embeddings & Free tier & \$0 \\
+\addlinespace
+Managed Redis & BullMQ backing store, sessions, and short-lived
+reset/invite/verification tokens & Free tier & \$0 \\
+\addlinespace
+Render & API and always-on worker hosting & Free tier & \$0 \\
+\addlinespace
+Vercel & Static frontend hosting & Free tier & \$0 \\
+\addlinespace
+Google Gemini API & Embeddings (\texttt{gemini-embedding-001}, 768 dims) for
+action search; question generation and survey insight
+(\texttt{gemini-2.5-flash}) & Free tier & \$0 \\
+\addlinespace
+Pinecone & Reranking of action-search candidates in explicit deep mode & Free
+tier & \$0 \\
+\addlinespace
+Brevo & Transactional email (verification, reset, invitation, survey) & Free
+tier & \$0 \\
+\addlinespace
+GitHub, Jira, SonarCloud & Metric sources & Team's own accounts & \$0 \\
+\midrule
+\textbf{Total} & & & \textbf{\$0} \\
+\end{longtable}
 
 \subsection{Economic Analysis and Financial Prospecting}
-\label{sec:economics}
-\guidance{Evaluate the financial prospect of the project with clear
-interpretation: development and operating cost, the potential users or
-market established in \Cref{sec:market}, and how the solution could
-generate value or revenue.}
+\label{subsec:economics}
+
+\paragraph{Operating cost and how it scales.} Operating cost decomposes into
+three usage-proportional components and one fixed component, and the shape of
+that decomposition is the economically interesting finding.
+
+Per tracked project per month the system consumes: one scheduled synchronisation
+per configured slot per day, each producing one snapshot and one scoring
+pass --- both of which are compute and storage against the database rather than
+calls against a paid API; one survey cycle, costing exactly two Gemini
+generation calls (one to generate questions, one to analyse responses); and one
+embedding call per logged action, cached by \texttt{content\_hash} so that an
+unedited action is never re-embedded. The fixed component is the always-on
+worker, which must run continuously regardless of portfolio size.
+
+\textbf{The qualitative conclusion follows without needing the exact numbers:
+per-project marginal cost is very low --- two AI generation calls per month plus
+database storage --- while the fixed worker cost dominates at small portfolio
+sizes.} That cost shape argues strongly for a single multi-tenant hosted
+offering over a per-organisation deployment, since the dominant cost is
+amortised across all tenants in the first case and replicated per customer in
+the second.
+
+At the current scale every one of these components fits within a free tier, so
+the operating cost is nil. As a portfolio grows, the always-on worker hosting
+and the database are the first components that would require paid plans, since
+they are the ones whose free-tier limits are tied to continuous running and
+stored volume rather than to occasional calls.
+
+\paragraph{Value proposition.} The benefit to an organisation of SSCL's kind is
+the recurring manual effort removed: a manager reconciling four to five tool
+dashboards per project on a fixed cadence, which \Cref{ch:problem} identifies as
+the originating problem. That effort grows with every project a manager
+oversees, while Pulse's per-project cost stays close to zero, so the benefit
+increases with portfolio size. A second benefit, earlier detection of a
+deteriorating project, is deliberately not claimed in monetary terms: the system
+has not run long enough to observe an instance, and claiming it would be
+unsupported.
+
+\paragraph{Revenue model.} The comparable commercial products identified in
+\Cref{ch:research} --- LinearB, Swarmia, Faros AI and Jellyfish --- are priced
+per seat. Per-seat pricing sits poorly with Pulse's cost structure for two
+reasons. First, cost scales with tracked projects and survey cycles rather than
+with logins, so per-seat pricing would systematically misprice the product
+against its own cost base. Second, and more seriously, charging per developer
+creates a direct financial incentive to exclude developers from the surveys, and
+the representativeness of that survey signal is the product's principal
+differentiator. A \textbf{per-tracked-project subscription} aligns price with
+cost and leaves survey coverage free at the margin, and is therefore the model
+proposed.
 
 \subsection{Sustainability in Business and Commercialisation}
-\label{sec:commercialisation}
-\guidance{Explain how the solution could remain viable after the course:
-the commercialisation or deployment path (e.g. with the industry partner)
-and who would maintain and operate it.}
+\label{subsec:commercialisation}
+
+The following points determine the system's future after the project.
+
+\begin{itemize}
+  \item \textbf{Handover.} The system is hosted and operational (C-08) and will
+  be handed over to SSCL.
+  \item \textbf{Custody of infrastructure.} The API and worker run on a
+  free-tier Render deployment (\Cref{subsec:deviation-deployment}), with
+  Supabase, Redis, Vercel, Gemini, Pinecone and Brevo accounts held by the team.
+  At handover each of these will be transferred to or recreated under SSCL's
+  ownership, and every credential rotated --- including the AES key protecting
+  per-project connector credentials, since re-keying requires re-encrypting the
+  stored values rather than simply changing an environment variable. The
+  encrypted connector credentials in the database are SSCL's property, not the
+  team's.
+  \item \textbf{NDA obligations.} The work is governed by a non-disclosure
+  agreement signed with SSCL (C-09). Because evaluation used the team's own
+  repositories, no SSCL production data is held in the team's database.
+  \item \textbf{What production would require beyond the current deployment.} A
+  paid database tier with backups; a redundant or restart-supervised worker,
+  since a single worker instance is a single point of failure for all
+  synchronisation, survey dispatch and embedding; centralised log aggregation
+  and alerting (gap G-04); and a named on-call owner. The free-tier deployment
+  is adequate to demonstrate the system but not to run it for a customer at
+  scale.
+\end{itemize}
 
 \section{Individual and Teamwork}
-\label{sec:team}
+\label{sec:teamwork}
 
 \subsection{Participation and Contribution}
-\label{sec:participation}
-\guidance{For each member, give the role, specific contributions, participation
-in discussions and decision-making, and whether responsibilities were
-completed on time.}
+\label{subsec:contribution}
+
+The team comprised five students. \Cref{tab:contributions} records each member's
+role and the modules they worked on.
+
+\begin{longtable}{
+  >{\raggedright\arraybackslash}p{0.20\textwidth}
+  >{\raggedright\arraybackslash}p{0.13\textwidth}
+  >{\raggedright\arraybackslash}p{0.18\textwidth}
+  >{\raggedright\arraybackslash}p{0.34\textwidth}
+}
+\caption{Team roles and modules}
+\label{tab:contributions}\\
+\toprule
+\textbf{Name} & \textbf{Student ID} & \textbf{Role} & \textbf{Modules worked on} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Name} & \textbf{Student ID} & \textbf{Role} & \textbf{Modules worked on} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+\guidance{[Name]} & \guidance{[ID]} & \guidance{[Role]} & \guidance{[Modules]} \\
+\addlinespace
+\guidance{[Name]} & \guidance{[ID]} & \guidance{[Role]} & \guidance{[Modules]} \\
+\addlinespace
+\guidance{[Name]} & \guidance{[ID]} & \guidance{[Role]} & \guidance{[Modules]} \\
+\addlinespace
+\guidance{[Name]} & \guidance{[ID]} & \guidance{[Role]} & \guidance{[Modules]} \\
+\addlinespace
+\guidance{[Name]} & \guidance{[ID]} & \guidance{[Role]} & \guidance{[Modules]} \\
+\end{longtable}
 
 \subsection{Collaboration and Conflict Resolution}
-\label{sec:collaboration}
-\guidance{Describe how the team collaborated and kept a constructive atmosphere,
-and how any conflicts were identified and resolved.}
+\label{subsec:collaboration}
+
+Collaboration was structured around a weekly meeting. At each meeting, tasks
+were assigned for the coming week. At the next meeting, each member reported how
+far their assigned work had progressed, and the team checked for dependencies
+between tasks --- whether one member's work was waiting on another's --- so that
+blocked work was identified and re-sequenced early rather than discovered at
+integration. Technical disagreements were raised and settled in the same
+meeting; where a question affected the product's direction, it was taken to the
+industry collaborator (\Cref{subsec:leadership}).
+
+Changes reached \texttt{main} through pull requests. Because C-02 left the team
+without dedicated quality-assurance or operations members, review was the point
+at which a second person saw a change before it reached \texttt{main}, and the
+automated gate of NFR-23 existed partly so that review effort could be spent on
+design and intent rather than on correctness a machine can establish.
 
 \subsection{Leadership and Direction}
-\label{sec:leadership}
-\guidance{Explain how direction toward the goals was provided, how members' views
-were listened to, how the team planned for improvement after setbacks, and
-how members were motivated.}
+\label{subsec:leadership}
+
+Technical direction was set through a cycle of internal discussion and partner
+review. The team discussed possible improvements among themselves, implemented
+them, and then presented each major improvement to SSCL's Chief Technical
+Officer, who gave technical direction for the next stage of work
+(\Cref{subsec:multidisciplinary}). The team therefore owned the design of each
+change, while the partner set its priorities and kept the product aligned with
+what its intended users needed.
+
+\Cref{ch:evaluation} supplies a ready example of a setback converted into a
+revised plan, and it is stronger evidence of direction than any general
+statement about leadership. When transactional email proved unreliable, the
+response was to migrate the provider and eliminate the failure mode
+(\Cref{subsec:deviation-email}) rather than to add retries around a mechanism
+that was structurally unsuited to the job.
 
 \subsection{Multidisciplinary Engagement}
-\label{sec:multidisciplinary}
-\guidance{Explain the multidisciplinary nature of the project and the team's
-participation in activities outside its own discipline: work with the
-industry partner, domain experts, end users, or other departments.}
+\label{subsec:multidisciplinary}
+
+The project required the team to work outside software engineering proper in
+three distinct directions.
+
+\paragraph{With the industry partner.} Requirements came from SSCL's Chief
+Technical Officer and from an intern with operational exposure, which meant
+translating a managerial complaint about dashboard reconciliation into a
+specification with verifiable acceptance criteria --- a requirements-engineering
+and client-management activity rather than a programming one. Engagement
+continued throughout development: the team held five meetings with SSCL's CTO,
+each after a major improvement to the system, and the design changed as a
+result:
+
+\begin{itemize}
+  \item \textbf{Audience.} The system was initially conceived for developers as
+  well as leadership. SSCL advised designing it only for top-level users such as
+  the CTO or CEO, which fixed the product's positioning as a portfolio-level
+  management tool.
+  \item \textbf{Anonymity.} SSCL required surveys to be anonymous, which the
+  design enforces in the data model (NFR-07, \Cref{subsec:inv2}).
+  \item \textbf{Delivery.} SSCL asked that survey links be sent by email rather
+  than posted to Slack, Discord or any other public channel. Email delivery to
+  each eligible developer is the default; chat-channel broadcast is used only if
+  an organisation chooses to supply a Slack, Discord or Telegram token.
+  \item \textbf{Frequency.} SSCL asked that a developer receive no more than one
+  survey within a set period --- a month, or 15 days --- and that the period be
+  configurable. This is the cooldown of FR-33
+  (\texttt{SURVEY\_MIN\_DAYS\_BETWEEN\_SURVEYS}, default 15 days).
+  \item \textbf{Action logging.} The team proposed the action log, and SSCL
+  approved it; it became FR-37--FR-41.
+\end{itemize}
+
+\paragraph{Into the measurement of work itself.} Deciding what constitutes
+``engineering health'', and how team morale and blockers can be measured without
+measuring individuals, draws on organisational behaviour and survey methodology
+rather than on computing. Several of the project's most consequential decisions
+are of this kind and not technical at all: collecting qualitative signal
+anonymously; declining to let a manager steer question wording
+(\Cref{subsec:deviation-guidance}); and designing the effectiveness review so
+that an owner may defer judgement rather than being forced to rate an outcome
+before evidence exists. Each trades data quality or convenience for measurement
+validity or respondent welfare.
+
+\paragraph{Into research ethics and data protection.} Deciding what may
+legitimately be inferred about identifiable people from data they did not
+volunteer, and what may be transmitted to a third-party model, is a governance
+question. The GDPR-derived principles treated as design constraints in
+\Cref{ch:requirements}, and the adversarial anonymity analysis in
+\Cref{subsec:inv2}, are the output of that work.
 
 \section{Impact on Society}
 \label{sec:society}
-\guidance{Consider all impacts of the solution on society, positive and negative,
-covering health, safety, cultural, and legal issues explicitly. For each,
-state who is affected and how the design responds. Be specific to this
-project.}
+
+The system's users are engineering managers, but the people it measures are
+developers, and the two groups experience it very differently. This section
+considers both, and covers health, safety, cultural and legal issues explicitly.
+
+\paragraph{Benefit: earlier detection.} The primary benefit is that a
+deteriorating project is identified from accumulated trend data rather than from
+its first visible failure --- a missed deadline or a broken release. Those
+affected are the client's leadership and managers (SH-01, SH-02) and,
+indirectly, the developers, for whom an intervention arriving before a crisis is
+less disruptive than one arriving after.
+
+\paragraph{Benefit: a feedback channel that did not previously exist.}
+Developers (SH-03) gain a route by which low morale, persistent blockers or loss
+of confidence in a plan reach management without any individual having to raise
+it personally. \Cref{ch:problem} identifies the absence of this channel as one
+of the two gaps the project addresses, and the anonymity of the channel is
+precisely what makes using it safe. This benefit is therefore \textbf{contingent
+on the anonymity guarantee being real}, which is why anonymity is enforced in
+the data model itself rather than promised in policy (\Cref{subsec:inv2}).
+
+\paragraph{Health and safety.} The system carries no physical safety
+implication: it controls no equipment and operates strictly read-only against
+the partner's tools (C-07). Its health dimension is occupational and
+psychological. Here the design has one genuine risk to answer for, addressed
+below, and one deliberate protection: the effectiveness review (FR-40) permits
+an action owner to defer judgement rather than forcing a rating before evidence
+exists, and presents overdue items in deliberately non-alarming styling ---
+amber rather than red --- with a persistent inline banner rather than a modal
+that interrupts or a toast that vanishes on a timer. Both choices accept a
+weaker dataset in exchange for not manufacturing pressure, which is the correct
+trade when the pressure would fall on a person and the data is only diagnostic.
+
+\paragraph{Principal risk: repurposing as individual surveillance.} A system
+that scores team health and reports on engineering practice can be turned
+against the people it measures. Three misuses are foreseeable:
+
+\begin{enumerate}
+  \item \emph{Reading a low team-health score as an indictment of named
+  individuals.} This cannot be prevented technically --- a manager determined to
+  read a project score as a verdict on a person will do so. The available
+  mitigation is presentational: because every score expands into the metrics
+  that produced it (FR-26), a manager who inspects a declining score sees bus
+  factor, ownership concentration or review network density, not a name.
+  \item \emph{Using survey findings to identify and pressure dissenters.}
+  Answered structurally by omitting respondent identity from
+  \texttt{survey\_response}: no stored response can be traced to its author.
+  Statistical inference from timing or content remains possible in principle
+  (\Cref{subsec:inv2}).
+  \item \emph{Treating connector metrics such as commit or review counts as
+  individual productivity measures.} Answered by scoring only at project level
+  and by excluding per-individual measurement from scope explicitly in
+  \Cref{ch:problem}. Note that the raw data to do this nonetheless passes
+  through the system, so the protection is a design commitment rather than an
+  impossibility; a future maintainer could add per-developer views without
+  fighting the architecture.
+\end{enumerate}
+
+\paragraph{Cultural considerations.} Survey candour depends on trust that
+anonymity is real, and that trust is cultural at least as much as technical. In
+a hierarchical workplace, or a small team where any response narrows authorship,
+developers may reasonably decline to answer candidly whatever the schema
+guarantees. This bounds the system's usefulness in exactly the situations where
+team health is most at risk. Enforcing anonymity in the schema is the technical
+half of that trust; the organisational half --- management visibly not
+attempting to identify respondents --- lies with the adopting organisation.
+
+\paragraph{Legal considerations.} Survey responses relate to identifiable
+individuals' working conditions even where the responses themselves are
+unattributable, and connector metrics include developer identities in their raw
+form. The design response is documented in \Cref{ch:requirements}: GDPR
+principles treated as design constraints, prompts constructed to exclude
+personal names and work-item identifiers, and credentials encrypted at rest.
+This evaluation verified the prompt claim by inspection --- no author, assignee,
+login, email, issue-key or branch fields appear in the AI payload construction
+(\Cref{subsec:eval-nfr}, NFR-09). The residual legal exposures are the free-text
+answers transmitted verbatim (gap G-03) and the absence of any data-subject
+access, rectification or erasure mechanism (gap G-01).
 
 \section{Environmental Impact and Life Cycle Sustainability}
+\label{sec:environment}
 \label{sec:sustainability}
-\guidance{Consider the environmental and sustainability impacts over the entire
-life cycle: development, deployment and operation, and retirement of the system and its data. Identify
-the negative impacts and propose mitigation for each.}
+
+The system owns no hardware, so its footprint is entirely the third-party cloud
+capacity it consumes, and it scales with usage rather than being fixed. Impact
+is considered across three life-cycle stages, with mitigation proposed for each
+negative impact.
+
+\paragraph{Development.} Consumption comprised developer workstations and the CI
+pipeline. CI is the non-obvious contributor: it runs type checking, linting, a
+build and two test suites on every push, and across a year of development that
+accumulates. Two design decisions already reduce it. The path filter means a
+backend-only change never builds the frontend, and the \texttt{concurrency}
+group with \texttt{cancel-in-progress} means that pushing twice in quick
+succession cancels the superseded run rather than letting both complete. Both
+were adopted for speed and reduce compute proportionally as a side effect.
+
+\paragraph{Operation.} Three components dominate. Scheduled synchronisation runs
+per project per configured slot and issues bounded-concurrency API calls; AI
+inference is the most energy-intensive operation per unit, covering embeddings
+for action search and two generation calls per survey cycle; and the always-on
+worker consumes continuously regardless of load, which at small portfolio sizes
+makes it the largest single share of an otherwise small total.
+
+Several existing design decisions reduce operational impact, and each is worth
+naming because each was taken for a different reason and has this as a side
+effect:
+
+\begin{itemize}
+  \item Embeddings are computed once per action and keyed by
+  \texttt{content\_hash}, so an unedited action is never re-embedded and a
+  repeated search never recomputes an embedding the system already holds.
+  \item Ordinary lexical search removes AI inference from the request path when
+  the user selects that mode. It remains available during an AI outage, although
+  a deep-search request currently returns 503 instead of switching to it
+  automatically (\Cref{subsec:inv3}).
+  \item Dashboard reads are served from stored snapshots and never trigger live
+  connector calls (NFR-17), so viewing a dashboard, the most frequent user
+  action, costs nothing externally.
+  \item Synchronisation is scheduled rather than continuous, which follows
+  directly from the product's positioning as a trend indicator and is the single
+  largest avoided cost relative to a real-time design.
+\end{itemize}
+
+Two further reductions are available and are proposed here even though they are
+not implemented: \textbf{synchronising only projects whose upstream state has
+changed} since the last snapshot, detectable cheaply from a repository's latest
+commit SHA before issuing the full metric fetch; and \textbf{pruning or
+aggregating snapshot detail beyond a retention horizon}, since a two-year-old
+daily snapshot serves no analytical purpose that a weekly aggregate would not,
+and storage grows unboundedly at one snapshot per project per day.
+
+\paragraph{Retirement.} Two distinct retirements must be handled and neither
+currently has an implemented path.
+
+When a \emph{customer offboards}, their connector credentials, snapshots,
+scores, surveys, responses and action log should be deleted on a stated
+timetable, and their access tokens revoked at the provider so that they cannot
+be used even if a copy of the ciphertext survives. When the \emph{system itself}
+is retired, the same applies across all tenants, together with deletion of
+embeddings held in the external Pinecone index --- which lives outside the
+primary database and is easily overlooked precisely because deleting the
+Postgres rows feels like completing the job.
+
+\textbf{Neither path exists today.} Gap G-02 records that no retention schedule
+is defined, and G-01 that no erasure mechanism is exposed. This is
+simultaneously a sustainability gap and a data-protection exposure, and it is
+required work before any handover to SSCL.
 
 \section{Ethics}
 \label{sec:ethics}
 
 \subsection{Equity and Inclusivity}
-\label{sec:equity}
-\guidance{Show how equity and inclusivity were considered: accessibility,
-fairness across user groups, and who might be excluded and how that was
-addressed.}
+\label{subsec:equity}
+
+\paragraph{Accessibility.} The frontend is built on Radix UI primitives, which
+supply keyboard interaction and ARIA semantics for dialogs, menus, tabs and
+similar components by default, so a baseline is inherited rather than earned.
+Beyond that baseline, this evaluation found deliberate accessibility work in the
+codebase: 46 \texttt{aria-label} attributes, 23 explicit \texttt{role}
+assignments, and uses of \texttt{aria-hidden}, \texttt{aria-expanded},
+\texttt{aria-modal}, \texttt{aria-labelledby}, \texttt{aria-haspopup},
+\texttt{aria-checked} and \texttt{aria-valuenow}, plus one visually-hidden
+(\texttt{sr-only}) heading. That is more than an untouched component library
+provides and indicates the concern was actively considered.
+
+What has \textbf{not} been established is conformance. No automated audit or
+assistive-technology testing was performed; colour contrast ratios have not been
+measured against the WCAG Level AA threshold; and the Recharts trend
+visualisations offer limited screen-reader semantics. A specific risk worth
+checking is that risk level is bucketed into LOW/MEDIUM/HIGH at the 40/70
+thresholds and rendered with colour coding --- a red/amber/green scale is the
+classic failure mode for colour-vision deficiency unless the numeric value is
+always rendered alongside it. Conformance is therefore claimed as
+\textbf{partial and unverified}, consistent with gap G-06, and attributable to
+C-02: the team had no dedicated design or accessibility specialist.
+
+\paragraph{Fairness across teams of different shapes.} The system must not
+advantage teams that happen to use the tools it integrates best. Two provisions
+address this. Weight renormalisation (FR-22) means a team without SonarQube or
+without Jira is scored on what it does have rather than penalised for what it
+lacks --- and \Cref{subsec:inv1} shows what the alternative would have cost such
+a team: on the worked example, a security score of 12 rather than 80, decided
+entirely by which tools were connected rather than by how the team works. The
+connector abstraction (NFR-21) means a team on a different toolchain is excluded
+by implementation effort rather than by design, as the six shipped connectors
+demonstrate.
+
+\paragraph{Who is excluded.} Two groups, stated plainly. Teams whose tools have
+no connector cannot be scored at all. And newly adopted projects have no trend
+data at all, since C-06 records that historical backfill is impossible, so the
+system is least useful precisely when a team first tries it and must be
+persuaded of its value.
 
 \subsection{Accountability and Personal Responsibility}
-\label{sec:accountability}
-\guidance{Show accountability and personal responsibility: who is responsible
-for the system's behaviour and failures, and how members took responsibility
-for their own work.}
+\label{subsec:accountability}
+
+\paragraph{For the system's output.} Pulse produces diagnostic signals about
+projects, not judgements about people, and that distinction is load-bearing
+rather than rhetorical. A score identifies where to look; accountability for
+what is done with that information rests with the manager who acts on it, not
+with the tool. The design supports this rather than merely asserting it: every
+score is decomposable into the metrics that produced it (FR-26, NFR-20), so a
+manager cannot honestly treat a number as an unexaminable verdict, and the
+deliberate separation of the connector-derived risk score from the AI-derived
+survey insight means neither silently contaminates the other's meaning.
+
+\paragraph{Within the team.} Every change reached \texttt{main} through a
+reviewed pull request, so each change carries both an identified author and an
+identified reviewer, and the automated gate of NFR-23 meant neither could merge
+work that failed to build or to pass its tests. Module responsibility followed
+task assignment at the weekly meeting (\Cref{subsec:collaboration}).
+
+\paragraph{A note on this evaluation.} The anonymity analysis in
+\Cref{subsec:inv2} was conducted by the team adversarially, against its own
+system. Accountability for a system's behaviour includes testing its guarantees
+from the attacker's side, particularly where the guarantee is a promise made to
+third parties --- in this case SSCL's developers, whose survey responses are
+promised anonymity.
 
 \subsection{Proper Use of Intellectual Property}
-\label{sec:ip}
-\guidance{Show due acknowledgement of others' work, prior art, intellectual
-property, and copyrighted material: cite sources, list third-party code,
-models, and datasets with their licences, and disclose any generative AI
-use.}
+\label{subsec:ip}
+
+\paragraph{Third-party software.} The system is built on open-source
+dependencies consumed through npm. On the backend: Express,
+\texttt{@supabase/supabase-js}, BullMQ, ioredis, Octokit (with the retry and
+throttling plugins), \texttt{@slack/web-api}, \texttt{@google/genai}, bcryptjs,
+helmet, cors, cookie-parser, morgan, pino, express-rate-limit, fast-xml-parser,
+adm-zip, nodemailer and resend. On the frontend: React, Vite, React Router,
+Tailwind CSS, Radix UI, MUI (\texttt{@mui/material}, \texttt{@mui/icons-material}),
+Recharts, Emotion, \texttt{react-hook-form}, \texttt{date-fns},
+\texttt{lucide-react}, \texttt{next-themes}, \texttt{motion}, \texttt{cmdk},
+\texttt{sonner}, \texttt{react-dnd}, \texttt{canvas-confetti} and others, with
+ESLint, TypeScript and Vitest in the toolchain.
+
+\paragraph{Third-party services.} GitHub, GitLab, Jira, Linear, SonarCloud,
+Gemini, Pinecone, Brevo, Slack, Telegram and Discord are used through their
+public APIs under their respective terms of service, read-only against the
+partner's instances using tokens the partner supplies (C-07). SH-06 records
+adherence to those terms as a stakeholder expectation, and the rate-limit
+provisions verified in \Cref{subsec:inv4} are part of honouring it rather than
+merely of staying within a budget.
+
+\paragraph{Partner material.} Work is conducted under a non-disclosure agreement
+signed with SSCL (C-09) governing both the handling of their data and what this
+report may disclose.
+
+\paragraph{Generative AI.} The candidates' declaration requires disclosure of
+generative-AI use, and it should be stated specifically and completely,
+separating the \emph{product} from the \emph{process}.
+
+\begin{itemize}
+  \item \textbf{In the product:} Google Gemini is a runtime component of the
+  delivered system. It generates survey questions, scores survey responses and
+  generates the insight summary, and asynchronously produces stored action
+  embeddings (\texttt{gemini-embedding-001}). The current deep-search request
+  path reranks action candidates directly through Pinecone; INV-3 found that it
+  does not fall back when Pinecone is unavailable. This is disclosed as an
+  architectural dependency, not as authoring assistance, and is described
+  throughout \Cref{ch:design,ch:evaluation}.
+  \item \textbf{In the process:} AI coding assistants, principally Claude and
+  Codex, were used for coding and debugging. In every case the team reviewed and
+  verified the output and takes responsibility for it.
+\end{itemize}
 
 \subsection{Professionalism and Ethical Codes}
-\label{sec:codes}
-\guidance{Show understanding of the engineer's role in protecting the public
-interest and awareness of the relevant codes of ethics (e.g. ACM, IEEE,
-IEB). Explain how they guided specific project decisions.}
+\label{subsec:codes}
+
+Three principles of the \textbf{ACM Code of Ethics and Professional Conduct}
+bore directly on decisions recorded elsewhere in this report. They are given
+here with the decision each governed and the cheaper alternative that was
+rejected, because that is what distinguishes engagement with a code from
+citation of one.
+
+\paragraph{Respect privacy (ACM 1.6).} The Code requires that systems collecting
+personal information collect only what is necessary and not repurpose it beyond
+what the subject understood. Pulse collects opinions about a project's condition
+from people whose employer will read the result. The decision this principle
+governed was \emph{where} to enforce anonymity. Omitting identity from
+\texttt{survey\_response} means direct attribution would require a deliberate
+schema change rather than an accidental application join. Investigation INV-2
+then tested that protection adversarially and found every stored linkage route
+closed. ACM 1.3 (honesty about limitations) is why the statistical routes that
+no schema can close are reported alongside that result rather than omitted.
+
+\paragraph{Avoid harm (ACM 1.2) and evaluate the risks of systems (ACM 2.5).}
+The foreseeable harm from this system is not technical failure but correct
+operation misapplied: scores read as verdicts on individuals, survey findings
+used to identify dissenters. ACM 2.5 requires comprehensive risk evaluation
+rather than a favourable one, which is why \Cref{sec:society} records the misuse
+the design \emph{cannot} prevent alongside the two it can, and why
+\Cref{subsec:inv2} was conducted as an adversarial exercise against the team's
+own system rather than as a confirmation of it.
+
+\paragraph{Hold the public good as the central concern (ACM 3.1; IEEE Code of
+Ethics clause 1).} This principle settled the two decisions where user welfare
+and engineering convenience pulled in opposite directions. Removing the
+manual-guidance override (\Cref{subsec:deviation-guidance}) discarded working,
+client-requested functionality because it would have quietly biased what the
+survey measured, and therefore what developers were understood to have said. The
+deferrable effectiveness review (FR-40) accepts a weaker dataset rather than
+pressing an owner to certify an outcome before the evidence exists. In both
+cases the convenient option was available, defensible on delivery grounds, and
+not taken.
+
+\paragraph{Institution of Engineers, Bangladesh (IEB) code of ethics.} The IEB
+code requires an engineer to act with integrity towards clients and employers
+and to respect the confidentiality of the information they entrust. That
+obligation governed how the project treated its industry partner: the work was
+carried out under a signed non-disclosure agreement, and the system was
+evaluated against the team's own repositories rather than SSCL's. Testing on
+partner data would have been quicker and more realistic, but it would have
+brought SSCL's confidential engineering data into a student development
+environment, and it was not done.

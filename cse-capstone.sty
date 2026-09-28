@@ -12,7 +12,10 @@
 \RequirePackage[utf8]{inputenc}
 % Times-style text, as in the official template; newtx gives better modern
 % font and mathematics support than the legacy `times` package.
-\RequirePackage{newtxtext}
+% Falls back to mathptmx (Times clone) where newtx is not installed, so the
+% document still builds on a minimal TeX Live; install texlive-fonts-extra
+% for the exact template fonts.
+\IfFileExists{newtxtext.sty}{\RequirePackage{newtxtext}}{\RequirePackage{mathptmx}}
 \RequirePackage{setspace}
 \onehalfspacing
 \RequirePackage{microtype}
@@ -21,7 +24,7 @@
 
 % ---- Maths ----------------------------------------------------------
 \RequirePackage{amsmath,amssymb}
-\RequirePackage{newtxmath}
+\IfFileExists{newtxmath.sty}{\RequirePackage{newtxmath}}{}
 
 % ---- Figures and tables ---------------------------------------------
 \RequirePackage{graphicx}

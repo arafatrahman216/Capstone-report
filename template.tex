@@ -1,0 +1,54 @@
+%======================================================================
+%  CSE 450 Capstone Project -- Report
+%  Department of Computer Science and Engineering, BUET
+%
+%  1. Fill in the block below.
+%  2. Write each chapter in chapters/*.tex, replacing every gray italic
+%     \guidance{...} note with your content.
+%  3. Add more chapters to best present your work, if needed.
+%  4. Build:  latexmk -pdf template.tex   (or Overleaf, compiler: pdfLaTeX)
+%======================================================================
+\documentclass[12pt,a4paper,oneside]{report}
+\usepackage{cse-capstone}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{tikz}
+\usetikzlibrary{calc}
+\usetikzlibrary{arrows.meta, positioning, fit, backgrounds}
+
+% ---------------------------------------------------------------------
+\newcommand{\ProjectTitle}{Project Intelligence Platform for Software Quality and Performance Tracking}
+\newcommand{\Session}{Session 2024--2025}
+\newcommand{\SubmissionDate}{Sep 2026}
+\newcommand{\Supervisors}{%
+  Mohammad Sadat Hossain\\
+  Lecturer, Department of CSE, BUET}
+% Team members are listed in frontmatter/titlepage.tex and declaration.tex
+% ---------------------------------------------------------------------
+
+\hypersetup{pdftitle={\ProjectTitle}}
+
+\begin{document}
+
+\pagenumbering{gobble}
+\input{frontmatter/titlepage}
+\pagenumbering{roman}
+\input{frontmatter/declaration}
+\input{frontmatter/acknowledgement}
+\input{frontmatter/abstract}
+\tableofcontents
+\listoffigures
+\listoftables
+
+\clearpage
+\pagenumbering{arabic}
+\input{chapters/problem}
+\input{chapters/research}
+\input{chapters/requirements}
+\input{chapters/design}
+\input{chapters/evaluation}
+\input{chapters/management_impact}
+\input{chapters/conclusion}
+
+\end{document}

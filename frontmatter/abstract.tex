@@ -1,0 +1,46 @@
+\chapter*{ABSTRACT}
+\addcontentsline{toc}{chapter}{Abstract}
+
+Engineering leadership at the industry collaborator for this project assessed the
+health of its software projects by consulting four to five separate tool
+dashboards, each reporting its own metrics in its own vocabulary and none
+offering a comparable measure of overall project health. Evaluating one project
+required reconciling several dashboards by hand.
+
+This project designed and built Pulse, a web platform that consolidates
+engineering metrics from independent tools into a single dashboard and converts
+them into comparable health scores. Metrics are retrieved on a schedule from four
+categories of tool, namely version control, issue tracking, continuous
+integration and static code analysis, through a connector abstraction that
+isolates each provider behind one interface. Each synchronisation is recorded as
+an immutable snapshot, from which seven health scores are computed on a uniform
+scale by a weighted model that redistributes the weight of unavailable metrics
+rather than penalising their absence. Every score remains explainable, because
+the contribution of each underlying metric can be recovered and displayed on
+demand. The platform also generates anonymous developer surveys whose
+questions are grounded in the project's own measured trends, and records the
+management actions taken in response to problems so that their effectiveness can
+be reviewed afterwards.
+
+Verification was applied at four levels. Static typing and a continuous
+integration pipeline gate every change on type checking, static analysis,
+building and testing. An automated suite of 131 test cases cov
+implementation, 83 of them targeting the scoring model, whose defects would
+otherwise be the least visible. Connector behaviour was verified
+against live provider interfaces, and the assembled pipeline was verified from
+provider data through to computed scores. Design calculations
+expected storage growth and external request volume remain within the free
+service tiers the project was constrained to use.
+
+The delivered system implements one connector in each of the four
+categories, computes seven explainable health scores per snapshot, and operates
+unattended on a daily schedule. It is deployed to cloud infrastructure and awaits
+handover to the collaborator. Its principal outstanding limitation is
+calibration, since the weights and thresholds in the scoring model are reasoned
+values rather than ones validated against recorded project outcomes.
+
+\vspace{12pt}
+\noindent\textbf{Keywords:} software project health monitoring
+metrics integration; weighted health scoring; developer surveys;
+tool connector architecture
+\clearpage 

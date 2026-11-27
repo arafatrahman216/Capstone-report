@@ -1,0 +1,272 @@
+% % Chapter 7 -- Rubric: PO12 (12.1)
+% \chapter{Conclusion}
+% \label{ch:conclusion}
+
+% \section{Conclusion and Future Work}
+% \label{sec:conclusion}
+% \guidance{Summarise achievement against each objective, the limitations, and
+% focused future work. Do not repeat the abstract.}
+
+% \section{Continuous Engagement and Self-directed Learning}
+% \label{sec:lessons}
+% \guidance{Demonstrate engagement in staying up to date: the tools, technologies,
+% and domain knowledge learned independently during the project, and the
+% emerging technical literature or documentation identified and used.}
+
+
+
+
+\chapter{Conclusion}
+\label{ch:conclusion}
+
+\section{Conclusion and Future Work}
+\label{sec:conclusion}
+
+The project set out to replace the practice of assessing software project health
+by reading several tool dashboards in sequence. That practice has been replaced
+by a working platform, deployed and operating on a daily schedule, though not yet
+transferred to the collaborator who proposed it.
+
+\subsection{Achievement Against Objectives}
+\label{subsec:objective-achievement}
+
+\begin{longtable}{
+  >{\raggedright\arraybackslash}p{0.08\textwidth}
+  >{\raggedright\arraybackslash}p{0.20\textwidth}
+  >{\raggedright\arraybackslash}p{0.56\textwidth}
+}
+\caption{Outcome against each stated objective}
+\label{tab:objective-outcomes}\\
+\toprule
+\textbf{ID} & \textbf{Outcome} & \textbf{Basis} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{ID} & \textbf{Outcome} & \textbf{Basis} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+O-01 & Achieved & One connector in each of the four tool categories feeds a single portfolio view and per-project dashboard, so routine assessment no
+longer requires opening any source tool \\
+\addlinespace
+O-02 & Achieved & Seven health dimensions are computed on a unerogeneous provider metrics, with a shared set of normalisationfunctions \\
+\addlinespace
+O-03 & Achieved & Any dimension score can be decomposed on demand into its contributing metrics with their raw values, applied weights and individual
+scores, recomputed from the stored snapshot rather than from a \\
+\addlinespace
+O-04 & Achieved with qualification & Anonymous surveys are gen measured trends and cannot be traced to a respondent, since noassociation is stored. The configured minimum response count before insight is released is not, however, enforced in the analysis path, which is recorded
+as gap G-02 and remains to be closed \\
+\addlinespace
+O-05 & Achieved & Management actions are recorded with problemrievable by keyword and by semantic similarity, and enter ascheduled effectiveness review that can be deferred but not silently skipped \\
+\addlinespace
+O-06 & Achieved & Scheduled synchronisation runs unattended at configurable times, spacing projects that share a credential and using deterministic job identifiers so that a repeated trigger cannot duplicate work \\
+\addlinespace
+O-07 & Achieved with qualification & A provider is added by wrtry entry, with no change to ingestion, persistence or scoring,and the restructuring of the scoring model from six categories to seven was confined to the strategy layer. The abstraction has not, however, been fully
+exercised, because only one provider per category is complete entations remain skeletons \\
+\end{longtable}
+
+\subsection{Limitations}
+\label{subsec:conclusion-limitations}
+
+The most consequential limitation concerns the scoring model rather than the
+software around it. Every weight, threshold and reference point in the seven
+dimensions is a reasoned value informed by published benchmark and by the
+collaborator's judgement, not one validated against recorded project outcomes.
+The system therefore produces scores that are internally consistent,
+reproducible and explainable, and that respond to real measured change, but
+whose absolute calibration is unproven. A score of 58 is meaning fully worse than
+a score of 72 for the same project over time, and the comparison between two
+projects is defensible, yet the claim that 58 represents a specific degree of
+risk is not yet supported by evidence.
+
+Three further limitations follow from the constraints under which the project
+ran. Coverage is one provider per tool category, so the connector abstraction has
+been validated against four API shapes rather than the eight or more that would
+demonstrate it generalises within a category. Analytical value accrues only from
+the point of adoption, because the source tools do not expose historical values
+for most metrics, so a newly onboarded project has a score but no trend. And the
+free service tiers provide no backup guarantee and bound the retained history at
+roughly four to seven years for a portfolio of the expected size.
+
+Two defects are known and unremediated. The minimum response threshold protecting
+survey anonymity is configured but not enforced, and the survey administration
+endpoints are not protected by the session authentication that guards every other
+authenticated endpoint. Both are small changes and both should precede handover,
+since both concern the collaborator's employees rather than the team's own data.
+
+Verification was also narrower than would be desirable. The automated suite
+covers units and pure functions thoroughly, particularly the scoring model, but
+no automated test exercises the database or the queue, no load testing was
+performed, and accessibility conformance was assessed by inspection rather than
+by audit.
+
+\subsection{Future Work}
+\label{subsec:future-work}
+
+Work falls into three tiers by urgency rather than by ambition.
+
+Immediately before handover, the two known defects should be closed, the
+credentials held by the development team should be rotated rather than
+transferred, the committed migration history should be reconciled with the
+deployed schema, and either a paid database tier or a periodic export to external
+storage should be arranged so that the accumulated history is recoverable.
+
+In the near term, three additions would materially improve the system without
+altering its design. A retention policy that thins snapshots older than a
+configured horizon to weekly resolution would extend the storage lifetime
+indefinitely, and is straightforward because snapshots are self-contained. A
+second provider in at least one category, most naturally the version-control
+category where a skeleton already exists, would test whether the connector
+abstraction genuinely generalises or merely accommodates the provider it was
+written against. And replacing the sprint-membership heuristic in the
+issue-tracker connector, which currently infers membership from date overlap
+rather than reading the provider's own sprint field, would improve the accuracy of
+every sprint-derived metric at once.
+
+The substantive future work is calibration, and the system is now positioned to
+perform it on itself. It records two things that the calibration problem needs,
+namely a time series of scores per project and a log of the management actions
+taken in response to problems, together with a subsequent assessment of whether
+each action helped. Once sufficient history has accumulated, those records permit
+an empirical question to be asked that could not be asked at the outset. Whether
+a decline in a given dimension reliably precedes the outcomes managers care
+about, and whether the interventions recorded against it are followed by
+recovery. Answering that would convert the weights from reasoned estimates into
+fitted ones, and would turn the action log from a record-keeping feature into the
+source of the system's own validation.
+
+\section{Continuous Engagement and Self-directed Learning}
+\label{sec:lessons}
+
+Most of the technical ground this project covers lay outside the taught
+curriculum, and was acquired during development from primary documentation,
+published industry research and the specifications of the tools being integrated.
+
+\subsection{Technologies Learned Independently}
+\label{subsec:tech-learned}
+
+Asynchronous job processing was learned in depth rather than in outline. The
+queue library's semantics for retry with exponential backoff, job priority,
+delayed execution, deterministic identifiers for idempotence and persisted
+repeatable schedulers were each studied and applied, and the last of these
+produced a non-obvious lesson. A schedule registered in the datastore continues
+firing after it is removed from the code, so schedules must be reconciled against
+configuration at startup rather than merely registered.
+
+Streaming progress across a process boundary required learning a pattern not
+covered in coursework. Because the process performing the work holds no 
+connection to the browser, progress is published to a channel, relayed by the
+process that does hold the connection, and forwarded as Server-Sent Events, with
+the terminal event additionally retained so that a reconnecting client is not left
+waiting on a channel that will not speak again.
+
+Vector search was new to the team in its entirety. Learning it meant
+understanding embedding generation, dimensionality and its effect on storage and
+search cost, cosine similarity as a retrieval measure, why normalisation matters
+when a model's output is truncated below its native dimension, why an embedding
+must be versioned by the model that produced it, and why a reranking pass over
+retrieved candidates outperforms similarity alone.
+
+Applied cryptography was learned to the extent the system required. This included
+authenticated encryption with an authentication tag, the requirement for a fresh
+initialisation vector per record, and the use of a version-tagged ciphertext so
+that encryption could be introduced without rewriting existing records.
+
+The integration work itself demanded provider-specific depth that no general
+resource supplies. This included the separate rate-limit budgets that a
+provider's REST and GraphQL interfaces maintain, the instance-specific custom
+field identifiers that an issue tracker uses for story points and epic links, the
+endpoints through which a static-analysis service exposes historical measures as
+distinct from current ones, and the several mutually incompatible file formats in
+which test and coverage results are published by continuous integration
+pipelines.
+
+One correctness lesson came from a defect rather than from reading. Timestamps
+written as coordinated universal time into a zone-naive column lose their offset
+on storage, are returned without one, and are then parsed as local time by the
+client, shifting every value by the reader's own offset without raising an error
+anywhere.
+
+\subsection{Domain Knowledge Acquired}
+\label{subsec:domain-learned}
+
+The measurement side of the project required a body of knowledge from software
+engineering research rather than from software construction. The four delivery
+indicators popularised by the DevOps Research and Assessment programme, namely
+deployment frequency, change lead time, change failure rate and time to restore
+service, were adopted directly and their published performance bands used as the
+initial calibration reference for the continuous integration dimension.
+Team-oriented measures were drawn from the same literature, including bus factor
+as a concentration-of-knowledge risk, code ownership concentration per directory,
+and review network density as an indicator of whether review is distributed or
+funnelled. Understanding why each of these is a proxy rather than a measurement,
+and where each misleads, was as important as computing them.
+
+A privacy concept was also adopted from outside the curriculum. Withholding
+aggregate insight until a minimum number of responses has been received is the
+practical application of a small-cell suppression rule, and it is the reason the
+survey subsystem is designed around a threshold at all.
+
+\subsection{Literature and Documentation Identified and Used}
+\label{subsec:literature-used}
+
+Primary documentation was treated as the authority throughout, and the sources
+consulted are cited in the repository alongside the code that depends on them
+rather than only in this report. The scoring rules for the continuous integration
+dimension record the industry performance study from which their bands derive. The
+semantic search reference records the embedding provider's own guidance on model
+selection, dimensionality and normalisation, the database vendor's guidance on
+semantic search, and the vector extension's own documentation. Separate notes
+record the exact permission scopes each connector requires from its provider,
+derived from those providers' authentication documentation. A published guide to
+the static-analysis service's metric catalogue informed the selection of which of
+its many measures are worth collecting.
+
+Recording these sources next to the code that relies on them proved to have a
+practical value beyond attribution. Where an implementation deliberately departs
+from the source, such as scoring a remediation effort as an absolute value after
+the provider stopped exposing the count that the documented formula divides by,
+the departure and its reason are recorded at the point of divergence rather than
+lost.
+
+\subsection{Learning Practices}
+\label{subsec:learning-practices}
+
+Because the subsystems were separable and the team worked part-time, learning had
+to be recorded rather than held in individual memory, and the repository carries
+the record. Four practices emerged over the two semesters.
+
+The first was to specify a component before building it. Each of the seven
+scoring dimensions has a written rule document setting out the metrics it
+consumes, their direction, their normalisation formula and their weights, and
+these were written ahead of the strategies that implement them. The same applies
+at a larger scale to the planning documents that preceded the backend, frontend
+and action-logging work.
+
+The second was to record divergence where implementation departed from the
+specification. Each scoring rule document carries an implementation note stating
+where the code does something different from what the document prescribes and
+why, the clearest instance being two metrics whose documented per-unit
+normalisation lost its divisor once the provider stopped exposing the count it
+divided by. Without that note the implementation would look simply incorrect
+against its own specification.
+
+The third was to write explanatory references for one another rather than only
+for the reader of this report. The shared scoring mechanism, the progress
+publication and streaming flow, and the operation of the background worker each
+have a document explaining how the mechanism works, addressed to a team member
+who has not worked in that area.
+
+The fourth was to maintain a running record of deferred work, whose own preamble
+states its purpose, which is that something identified but intentionally not
+done should not be lost once the discussion that surfaced it has passed. Several
+of the limitations reported in this chapter were first recorded there, including
+the sprint-membership heuristic and the metric that could not be implemented for
+want of a data convention.
+
+Alongside these, provider behaviour was verified empirically rather than assumed
+from documentation. A separate script exists for each connector that runs it
+against a real project and prints its complete output, and it was through these
+that the gaps between what a provider documents and what it returns for a given
+repository were found.
